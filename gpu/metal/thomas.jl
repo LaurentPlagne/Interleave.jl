@@ -1,5 +1,6 @@
 using Interleave
 using Metal
+using BenchmarkTools
 
 # This is ordinary scalar Julia. The same function can be passed to `apply!` on the
 # CPU and to `gpu_apply!` on Metal.
@@ -39,6 +40,12 @@ function main(; nbatch = 65_536, nx = 64, workgroupsize = 256)
     reference = copy(X)
     apply!(thomas!, reference, D, U, L, B; scratch = zeros(Float32, nx))
     @assert result == reference
+    elapsed = @belapsed gpu_apply!($(thomas!), $dX, $dD, $dU, $dL, $dB;
+                                   scratch = $dS, workgroupsize = $workgroupsize,
+                                   wait = true) samples = 10 evals = 1
+    println("Metal Thomas: ", round(elapsed * 1e3; digits = 3),
+            " ms | ", round(2 * nbatch * nx / elapsed / 1e9; digits = 2),
+            " GF32/s | workgroup = ", workgroupsize)
     result
 end
 

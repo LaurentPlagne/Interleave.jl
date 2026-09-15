@@ -1,13 +1,22 @@
-name: Benchmarks
+name: Cross-platform benchmarks
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
   schedule:
     - cron: '17 3 * * 6'
 
+# Benchmark numbers are reports, not pass/fail gates. Hosted runners are shared
+# machines, so timing noise must never prevent a merge.
+permissions:
+  contents: read
+
 jobs:
-  benchmark:
+  cpu-linux:
+    name: CPU benchmark / Linux x86-64
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -16,6 +25,85 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Instantiate benchmark environment
         run: julia --project=bench -e 'using Pkg; Pkg.instantiate()'
-      - name: Run benchmark smoke test
-        run: julia --project=bench bench/runall.jl
+      - name: Run CPU benchmark suite
+        env:
+          JULIA_NUM_THREADS: 2
+        run: |
+          julia --project=bench -t 2 bench/runall.jl | tee linux-cpu.txt
+          cat linux-cpu.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: interleave-linux-cpu
+          path: linux-cpu.txt
 
+  cpu-metal:
+    name: CPU + Metal benchmark / macOS Apple Silicon
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate CPU benchmark environment
+        run: julia --project=bench -e 'using Pkg; Pkg.instantiate()'
+      - name: Run CPU benchmark suite on Apple Silicon
+        env:
+          JULIA_NUM_THREADS: 2
+        run: |
+          julia --project=bench -t 2 bench/runall.jl | tee macos-cpu.txt
+          cat macos-cpu.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Instantiate Metal environment
+        run: julia --project=gpu/metal -e 'using Pkg; Pkg.instantiate()'
+      - name: Run resident Metal benchmark
+        run: |
+          julia --project=gpu/metal gpu/metal/thomas.jl | tee macos-metal.txt
+          cat macos-metal.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: interleave-macos-cpu-metal
+          path: |
+            macos-cpu.txt
+            macos-metal.txt
+
+  vulkan-abi:
+    name: Vulkan/SPIR-V shader validation / Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vulkan software runtime and tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mesa-vulkan-drivers vulkan-tools
+          vulkaninfo --summary || true
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate Vulkan environment
+        run: julia --project=gpu/vulkan -e 'using Pkg; Pkg.instantiate()'
+      - name: Compile and validate SPIR-V ABI
+        run: julia --project=gpu/vulkan gpu/vulkan/compile.jl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: interleave-vulkan-spirv
+          path: gpu/vulkan/shaders/thomas.spv
+
+  # A real Vulkan performance measurement needs a self-hosted runner with a
+  # labelled GPU. Enable this job by setting the repository variable
+  # INTERLEAVE_VULKAN_RUNNER=true and registering labels linux,vulkan,gpu.
+  vulkan-gpu:
+    name: Vulkan GPU benchmark / self-hosted
+    if: ${{ vars.INTERLEAVE_VULKAN_RUNNER == 'true' }}
+    runs-on: [self-hosted, linux, vulkan, gpu]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vulkan device information
+        run: vulkaninfo --summary
+      - name: Run Vulkan benchmark harness
+        run: |
+          echo 'The Vulkan host dispatcher is not part of the current Julia API.'
+          echo 'This job is intentionally a reservation point for the device backend.'

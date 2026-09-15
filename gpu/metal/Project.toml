@@ -1,4 +1,5 @@
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Interleave = "78236f9a-ac10-428a-a2bd-9ee43c5196d7"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 
