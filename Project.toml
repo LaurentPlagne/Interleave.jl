@@ -20,8 +20,9 @@ SIMD = "3.7.2"
 julia = "1.10"
 
 [extras]
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["KernelAbstractions", "Test"]
+test = ["InteractiveUtils", "KernelAbstractions", "Test"]
