@@ -12,6 +12,19 @@ struct SharedBuf{S}
 end
 (s::SharedBuf)() = s.buf
 
+# Keep allocation measurements behind a function barrier.  Measuring a keyword call
+# directly in the top-level testset can count the test harness' boxed globals on stable
+# Julia releases, even though the specialized driver itself is allocation-free.
+function allocated_thomas(X, D, U, L, B, scratch)
+    apply!(thomas!, X, D, U, L, B; scratch = scratch)
+    @allocated apply!(thomas!, X, D, U, L, B; scratch = scratch)
+end
+
+function allocated_tridiag(R, D, U, L, X)
+    apply!(tridiag_mul!, R, D, U, L, X)
+    @allocated apply!(tridiag_mul!, R, D, U, L, X)
+end
+
 const T = Float32
 const P = 8
 
@@ -190,11 +203,9 @@ end
         shared = SharedBuf(fill!(Array{Vec{P,T}}(undef, nx), zero(Vec{P,T})))
         for nbatch in (64, 6400)                   # l'invariant : aucune croissance avec npacks
             X, D, U, L, B = thomas_setup(nbatch, nx)
-            apply!(thomas!, X, D, U, L, B; scratch = shared)         # échauffement
-            @test @allocated(apply!(thomas!, X, D, U, L, B; scratch = shared)) == 0
+            @test allocated_thomas(X, D, U, L, B, shared) == 0
             R, Dm, Um, Lm, Xm = thomas_setup(nbatch, nx)
-            apply!(tridiag_mul!, R, Dm, Um, Lm, Xm)                  # sans scratch du tout
-            @test @allocated(apply!(tridiag_mul!, R, Dm, Um, Lm, Xm)) == 0
+            @test allocated_tridiag(R, Dm, Um, Lm, Xm) == 0
         end
     end
 
