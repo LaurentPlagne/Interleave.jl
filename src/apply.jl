@@ -15,9 +15,14 @@
 @inline _apply(f::F, views::NTuple{NA,Any}, ::Nothing) where {F,NA} = f(views...)
 @inline _apply(f::F, views::NTuple{NA,Any}, scratch) where {F,NA} = f(views..., scratch)
 
+"""Build the fixed-arity tuple of instance views without a closure allocation."""
+@generated function _instances(arrays::NTuple{NA,Any}, k) where {NA}
+    Expr(:tuple, [:(instance(arrays[$i], k)) for i in 1:NA]...)
+end
+
 function _runpacks!(f::F, ks, arrays::NTuple{NA,Any}, scratch) where {F,NA}
     for k in ks
-        _apply(f, ntuple(i -> instance(arrays[i], k), Val(NA)), scratch)
+        _apply(f, _instances(arrays, k), scratch)
     end
     nothing
 end
