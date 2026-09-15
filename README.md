@@ -35,6 +35,16 @@ The experimental [GPU design and tutorial](docs/src/manual/gpu.md) explain the M
 driver, batch-major device layout, and the deliberately lower-level Vulkan/SPIR-V
 prototype.
 
+## Reproducible target benchmarks
+
+The GitHub Actions workflow `Cross-platform benchmarks` can be launched manually, on a
+release, or weekly. It runs the CPU suite on Linux and Apple Silicon, measures the resident
+Metal Thomas kernel on macOS, and compiles/validates the Vulkan SPIR-V ABI on Linux. The
+results and raw logs are uploaded as workflow artifacts. A real Vulkan throughput job is
+reserved for a self-hosted runner labelled `linux`, `vulkan`, and `gpu`; the standard GitHub
+hosted Linux runner is used only for software validation and must not be presented as a GPU
+performance result.
+
 Interleave.jl is experimental. It is not registered yet; install the repository directly:
 
 ```julia

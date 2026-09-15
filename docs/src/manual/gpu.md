@@ -91,6 +91,22 @@ shader:
 Only after that runtime is measured should a Julia-to-SPIR-V or MLIR lowering layer be
 considered. It is a compiler project, not a container change.
 
+## Continuous benchmark targets
+
+The repository workflow mirrors the multi-target structure used by Legolas++:
+
+- Linux x86-64 runs the complete `BenchmarkTools` CPU suite;
+- macOS 14 on Apple Silicon runs the same CPU suite and a resident Metal Thomas benchmark;
+- Linux validates the Vulkan 1.2 shader and its SPIR-V ABI using Mesa's software runtime;
+- an optional self-hosted `linux,vulkan,gpu` job is reserved for real Vulkan throughput once
+  the host dispatcher exists.
+
+The CPU and Metal jobs upload their raw output and append it to the GitHub job summary. They
+are deliberately report-only: hosted runners are shared machines, so timing variance must not
+turn a performance observation into a correctness failure. Vulkan software validation is also
+not a GPU performance measurement; it only protects the shader/ABI contract until a physical
+GPU runner is available.
+
 ## Correctness contract
 
 The GPU tests must preserve the properties that matter:
@@ -112,4 +128,3 @@ GPU launch and transfer overhead can dominate short recurrences or small batches
 GPU path is attractive when the population is large, the data remains resident across
 several operations, and each problem exposes enough sequential work to amortize launch
 cost without exhausting registers. CPU DLI remains the low-latency path.
-
