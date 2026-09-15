@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 500" role="img" aria-labelledby="title desc">
+  <title id="title">Scalar and four-lane execution of the same low-pass recurrence</title>
+  <desc id="desc">On the left, scalar execution reads one value for one signal. On the right, interleaved storage presents four values as one packet and advances four independent recurrences with one instruction.</desc>
+  <style>
+    :root{color-scheme:light dark}.bg{fill:#fff;stroke:#d0d7de}.panel{fill:#f6f8fa;stroke:#d0d7de}.ink{fill:#1f2328}.muted{fill:#57606a}.cell{fill:#fff;stroke:#8c959f}.packetcell{stroke:#fff;stroke-width:1}.j1{fill:#4063d8}.j2{fill:#cb3c33}.j3{fill:#389826}.j4{fill:#9558b2}.cursor{fill:none;stroke:#e3a008;stroke-width:4}.scalar{animation:scalar-read 7.2s steps(24,end) infinite}.packed{animation:packet-read 1.8s steps(5,end) infinite}.op{fill:#e3a008;opacity:.13;stroke:#e3a008}.flow{stroke:#8c959f;stroke-width:2;fill:none;marker-end:url(#arrow)}
+    text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px}.heading{font-size:20px;font-weight:700}.sub{font-size:16px;font-weight:700}.inside{fill:#fff;font-size:11px;font-weight:700;text-anchor:middle}
+    @keyframes scalar-read{0%{transform:translate(0,0)}24.9%{transform:translate(295px,0)}25%{transform:translate(0,48px)}49.9%{transform:translate(295px,48px)}50%{transform:translate(0,96px)}74.9%{transform:translate(295px,96px)}75%{transform:translate(0,144px)}100%{transform:translate(295px,144px)}}
+    @keyframes packet-read{from{transform:translateX(0)}to{transform:translateX(295px)}}
+    @media(prefers-color-scheme:dark){.bg{fill:#0d1117;stroke:#30363d}.panel{fill:#161b22;stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#9da7b3}.cell{fill:#0d1117;stroke:#6e7681}.packetcell{stroke:#161b22}}
+    @media(prefers-reduced-motion:reduce){.scalar,.packed{animation:none}}
+  </style>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#8c959f"/></marker></defs>
+  <rect class="bg" x="1" y="1" width="958" height="498" rx="8"/>
+  <text class="heading ink" x="28" y="38">Same low-pass loop, different machine element</text>
+  <text class="muted" x="28" y="62">y[n] = α y[n−1] + β x[n] — time remains sequential; signals are independent.</text>
+
+  <rect class="panel" x="28" y="86" width="438" height="374" rx="8"/>
+  <text class="sub ink" x="48" y="118">Scalar element: Float32</text>
+  <text class="muted" x="48" y="140">One load and one recurrence advance at a time</text>
+  <g transform="translate(72 178)">
+    <g class="cell">
+      <g><rect x="0" y="0" width="54" height="34"/><rect x="59" y="0" width="54" height="34"/><rect x="118" y="0" width="54" height="34"/><rect x="177" y="0" width="54" height="34"/><rect x="236" y="0" width="54" height="34"/><rect x="295" y="0" width="54" height="34"/></g>
+      <g transform="translate(0 48)"><rect x="0" y="0" width="54" height="34"/><rect x="59" y="0" width="54" height="34"/><rect x="118" y="0" width="54" height="34"/><rect x="177" y="0" width="54" height="34"/><rect x="236" y="0" width="54" height="34"/><rect x="295" y="0" width="54" height="34"/></g>
+      <g transform="translate(0 96)"><rect x="0" y="0" width="54" height="34"/><rect x="59" y="0" width="54" height="34"/><rect x="118" y="0" width="54" height="34"/><rect x="177" y="0" width="54" height="34"/><rect x="236" y="0" width="54" height="34"/><rect x="295" y="0" width="54" height="34"/></g>
+      <g transform="translate(0 144)"><rect x="0" y="0" width="54" height="34"/><rect x="59" y="0" width="54" height="34"/><rect x="118" y="0" width="54" height="34"/><rect x="177" y="0" width="54" height="34"/><rect x="236" y="0" width="54" height="34"/><rect x="295" y="0" width="54" height="34"/></g>
+    </g>
+    <g class="muted" text-anchor="end"><text x="-10" y="22">x₁</text><text x="-10" y="70">x₂</text><text x="-10" y="118">x₃</text><text x="-10" y="166">x₄</text></g>
+    <rect class="cursor scalar" x="-4" y="-4" width="62" height="42" rx="5"/>
+    <g class="muted" text-anchor="middle"><text x="27" y="202">n=1</text><text x="86" y="202">2</text><text x="145" y="202">3</text><text x="204" y="202">4</text><text x="263" y="202">5</text><text x="322" y="202">6</text></g>
+  </g>
+  <path class="flow" d="M148 402h106"/><rect class="op" x="273" y="379" width="146" height="47" rx="7"/><text class="ink" x="346" y="408" text-anchor="middle">scalar mul + add</text>
+
+  <rect class="panel" x="494" y="86" width="438" height="374" rx="8"/>
+  <text class="sub ink" x="514" y="118">Packed element: Vec{4,Float32}</text>
+  <text class="muted" x="514" y="140">One packet load advances four recurrences</text>
+  <g transform="translate(530 178)">
+    <g>
+      <g transform="translate(0 0)"><rect class="packetcell j1" x="0" y="0" width="13" height="136"/><rect class="packetcell j2" x="13" y="0" width="13" height="136"/><rect class="packetcell j3" x="26" y="0" width="13" height="136"/><rect class="packetcell j4" x="39" y="0" width="13" height="136"/></g>
+      <g transform="translate(59 0)"><rect class="packetcell j1" x="0" y="0" width="13" height="136"/><rect class="packetcell j2" x="13" y="0" width="13" height="136"/><rect class="packetcell j3" x="26" y="0" width="13" height="136"/><rect class="packetcell j4" x="39" y="0" width="13" height="136"/></g>
+      <g transform="translate(118 0)"><rect class="packetcell j1" x="0" y="0" width="13" height="136"/><rect class="packetcell j2" x="13" y="0" width="13" height="136"/><rect class="packetcell j3" x="26" y="0" width="13" height="136"/><rect class="packetcell j4" x="39" y="0" width="13" height="136"/></g>
+      <g transform="translate(177 0)"><rect class="packetcell j1" x="0" y="0" width="13" height="136"/><rect class="packetcell j2" x="13" y="0" width="13" height="136"/><rect class="packetcell j3" x="26" y="0" width="13" height="136"/><rect class="packetcell j4" x="39" y="0" width="13" height="136"/></g>
+      <g transform="translate(236 0)"><rect class="packetcell j1" x="0" y="0" width="13" height="136"/><rect class="packetcell j2" x="13" y="0" width="13" height="136"/><rect class="packetcell j3" x="26" y="0" width="13" height="136"/><rect class="packetcell j4" x="39" y="0" width="13" height="136"/></g>
+      <g transform="translate(295 0)"><rect class="packetcell j1" x="0" y="0" width="13" height="136"/><rect class="packetcell j2" x="13" y="0" width="13" height="136"/><rect class="packetcell j3" x="26" y="0" width="13" height="136"/><rect class="packetcell j4" x="39" y="0" width="13" height="136"/></g>
+    </g>
+    <rect class="cursor packed" x="-4" y="-4" width="60" height="144" rx="5"/>
+    <g class="muted" text-anchor="middle"><text x="26" y="160">n=1</text><text x="85" y="160">2</text><text x="144" y="160">3</text><text x="203" y="160">4</text><text x="262" y="160">5</text><text x="321" y="160">6</text></g>
+    <g class="inside" transform="translate(26 22)"><text x="0" y="0">1</text><text x="0" y="32">2</text><text x="0" y="64">3</text><text x="0" y="96">4</text></g>
+  </g>
+  <path class="flow" d="M614 402h106"/><rect class="op" x="739" y="379" width="146" height="47" rx="7"/><text class="ink" x="812" y="399" text-anchor="middle">vector mul + add</text><text class="muted" x="812" y="417" text-anchor="middle">four lanes, one instruction</text>
+  <text class="muted" x="480" y="485" text-anchor="middle">The source loop is unchanged; storage decides what x[n] and y[n−1] mean.</text>
+</svg>

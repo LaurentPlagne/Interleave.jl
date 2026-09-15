@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">A fused Sobel and temporal-motion pipeline</title>
+  <desc id="desc">Current and previous frames feed two branches. A Sobel spatial branch and a temporal difference branch merge into one output without materialising intermediate images. Animated pulses show the fused flow.</desc>
+  <style>
+    :root{color-scheme:light dark}.bg{fill:#fff;stroke:#d0d7de}.panel{fill:#f6f8fa;stroke:#d0d7de}.ink{fill:#1f2328}.muted{fill:#57606a}
+    text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:12px}.heading{font-size:19px;font-weight:700}.stage-title{font-size:15px;font-weight:700}
+    .frame{fill:url(#pixels);stroke:#8c959f}.pattern-bg{fill:#fff}.pattern-line{stroke:#d0d7de}.window{fill:#4063d8;fill-opacity:.15;stroke:#4063d8;stroke-width:2;animation:scan 3.6s steps(3,end) infinite}.wire{fill:none;stroke:#8c959f;stroke-width:2;marker-end:url(#arrow)}
+    .pulse-a{fill:#4063d8;animation:pathA 3.6s linear infinite}.pulse-b{fill:#cb3c33;animation:pathB 3.6s linear infinite}.fuse{fill:#e3a008;stroke:#b57c00}.output{fill:#389826;fill-opacity:.18;stroke:#389826;stroke-width:2}
+    @keyframes scan{from{transform:translate(0,0)}to{transform:translate(48px,48px)}}@keyframes pathA{0%{transform:translate(0,0)}45%{transform:translate(290px,0)}70%{transform:translate(430px,80px)}100%{transform:translate(650px,80px)}}@keyframes pathB{0%{transform:translate(0,0)}45%{transform:translate(290px,0)}70%{transform:translate(430px,-80px)}100%{transform:translate(650px,-80px)}}
+    @media(prefers-color-scheme:dark){.bg{fill:#0d1117;stroke:#30363d}.panel{fill:#161b22;stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#9da7b3}.frame{stroke:#6e7681}.wire{stroke:#6e7681}.pattern-bg{fill:#0d1117}.pattern-line{stroke:#30363d}}
+    @media(prefers-reduced-motion:reduce){.window,.pulse-a,.pulse-b{animation:none}}
+  </style>
+  <defs>
+    <pattern id="pixels" width="24" height="24" patternUnits="userSpaceOnUse"><rect class="pattern-bg" width="24" height="24"/><path class="pattern-line" d="M24 0H0V24" fill="none"/></pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#8c959f"/></marker>
+  </defs>
+  <rect class="bg" x="1" y="1" width="958" height="418" rx="8"/>
+  <text class="heading ink" x="28" y="36">Fusion saves intermediates; packing chooses a SIMD direction</text>
+  <text class="muted" x="28" y="59">Sobel and temporal motion are evaluated inside one independent output-pixel loop.</text>
+  <rect class="panel" x="28" y="82" width="904" height="294" rx="7"/>
+
+  <g transform="translate(58 115)">
+    <text class="stage-title ink" x="60" y="0" text-anchor="middle">current frame</text><rect class="frame" x="0" y="18" width="120" height="120"/><rect class="window" x="0" y="18" width="72" height="72"/>
+    <text class="stage-title ink" x="60" y="174" text-anchor="middle">previous frame</text><rect class="frame" x="0" y="192" width="120" height="72"/>
+
+    <path class="wire" d="M120 78H290"/><path class="wire" d="M120 228H205Q245 228 245 190V172Q245 152 290 152"/>
+    <g transform="translate(290 39)"><rect class="output" width="150" height="78" rx="7"/><text class="stage-title ink" x="75" y="31" text-anchor="middle">Sobel 3×3</text><text class="muted" x="75" y="53" text-anchor="middle">gx² + gy²</text></g>
+    <g transform="translate(290 137)"><rect class="output" width="150" height="78" rx="7"/><text class="stage-title ink" x="75" y="31" text-anchor="middle">time difference</text><text class="muted" x="75" y="53" text-anchor="middle">(current − previous)²</text></g>
+    <path class="wire" d="M440 78H515Q540 78 540 112V127"/><path class="wire" d="M440 176H515Q540 176 540 142V127"/>
+    <circle class="fuse" cx="540" cy="127" r="25"/><text class="ink" x="540" y="132" text-anchor="middle" font-weight="700">α + β</text>
+    <path class="wire" d="M565 127H695"/>
+    <g transform="translate(695 67)"><rect class="output" width="140" height="120" rx="7"/><path d="M18 95L42 64L64 78L88 34L120 53" fill="none" stroke="#389826" stroke-width="4"/><text class="stage-title ink" x="70" y="24" text-anchor="middle">fused output</text></g>
+    <circle class="pulse-a" cx="120" cy="78" r="7"/><circle class="pulse-b" cx="120" cy="228" r="7"/>
+  </g>
+  <text class="muted" x="480" y="400" text-anchor="middle">no edge image or motion image is written between stages</text>
+</svg>

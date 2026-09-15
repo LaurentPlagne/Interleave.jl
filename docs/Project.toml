@@ -1,0 +1,10 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Interleave = "78236f9a-ac10-428a-a2bd-9ee43c5196d7"
+SIMD = "fdea26ae-647d-5447-a871-4b548cad5224"
+
+[sources]
+Interleave = {path = ".."}
+
+[compat]
+Documenter = "1"

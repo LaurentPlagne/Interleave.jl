@@ -1,0 +1,55 @@
+#version 450
+
+// Workgroup size is specialization constant 0. The host should start with 256 and tune.
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
+
+// All buffers share the scalar, batch-major layout:
+//     index(problem, i) = problem + i * stride
+// where `stride >= nbatch`. Bindings are intentionally fixed as the prototype ABI.
+layout(std430, set = 0, binding = 0) buffer XBuffer { float X[]; };
+layout(std430, set = 0, binding = 1) readonly buffer DBuffer { float D[]; };
+layout(std430, set = 0, binding = 2) readonly buffer UBuffer { float U[]; };
+layout(std430, set = 0, binding = 3) readonly buffer LBuffer { float L[]; };
+layout(std430, set = 0, binding = 4) readonly buffer BBuffer { float B[]; };
+layout(std430, set = 0, binding = 5) buffer SBuffer { float S[]; };
+
+layout(push_constant) uniform Parameters {
+    uint nbatch;
+    uint nx;
+    uint stride;
+} params;
+
+uint offset(uint problem, uint i)
+{
+    return problem + i * params.stride;
+}
+
+void main()
+{
+    uint problem = gl_GlobalInvocationID.x;
+    if (problem >= params.nbatch || params.nx == 0) {
+        return;
+    }
+
+    uint current = offset(problem, 0);
+    float s = D[current];
+    float sm1 = 1.0 / s;
+    X[current] = B[current] * sm1;
+
+    for (uint i = 1; i < params.nx; ++i) {
+        current = offset(problem, i);
+        uint previous = offset(problem, i - 1);
+        S[current] = U[previous] * sm1;
+        s = D[current] - L[current] * S[current];
+        X[current] = B[current] - L[current] * X[previous];
+        sm1 = 1.0 / s;
+        X[current] *= sm1;
+    }
+
+    for (int i = int(params.nx) - 2; i >= 0; --i) {
+        current = offset(problem, uint(i));
+        uint next = offset(problem, uint(i + 1));
+        X[current] -= S[next] * X[next];
+    }
+}
+

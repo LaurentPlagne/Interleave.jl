@@ -1,0 +1,27 @@
+name = "Interleave"
+uuid = "78236f9a-ac10-428a-a2bd-9ee43c5196d7"
+version = "0.1.0"
+authors = ["Laurent Plagne <laurent.plagne@gmail.com>"]
+
+[deps]
+OhMyThreads = "67456a42-1dca-4109-a031-0a68de7e3ad5"
+SIMD = "fdea26ae-647d-5447-a871-4b548cad5224"
+
+[weakdeps]
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+
+[extensions]
+InterleaveKernelAbstractionsExt = "KernelAbstractions"
+
+[compat]
+KernelAbstractions = "0.9.42"
+OhMyThreads = "0.8.6"
+SIMD = "3.7.2"
+julia = "1.10"
+
+[extras]
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["KernelAbstractions", "Test"]

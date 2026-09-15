@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 450" role="img" aria-labelledby="title desc">
+  <title id="title">A recurrence-aware reading of the roofline model</title>
+  <desc id="desc">The classical memory and compute rooflines bound attainable throughput. A scalar dependency chain can sit far below both. Interleaving independent problems raises instruction-level parallelism at unchanged arithmetic intensity until another roof becomes limiting.</desc>
+  <style>
+    :root{color-scheme:light dark}.bg{fill:#fff;stroke:#d0d7de}.plot{fill:#f6f8fa;stroke:#d0d7de}.ink{fill:#1f2328}.muted{fill:#57606a}.grid{stroke:#d8dee4;stroke-width:1}.axis{fill:none;stroke:#57606a;stroke-width:2}.memory{fill:none;stroke:#389826;stroke-width:4}.compute{fill:none;stroke:#4063d8;stroke-width:4}.latency{fill:none;stroke:#cb3c33;stroke-width:3;stroke-dasharray:8 6}.gain{fill:none;stroke:#e3a008;stroke-width:4;marker-end:url(#arrow)}.scalar{fill:#cb3c33}.dli{fill:#e3a008}.threaded{fill:#389826}
+    text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px}.heading{font-size:20px;font-weight:700}.label{font-size:13px;font-weight:700}
+    @media(prefers-color-scheme:dark){.bg{fill:#0d1117;stroke:#30363d}.plot{fill:#161b22;stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#9da7b3}.grid{stroke:#30363d}.axis{stroke:#9da7b3}}
+  </style>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#e3a008"/></marker></defs>
+  <rect class="bg" x="1" y="1" width="958" height="448" rx="8"/>
+  <text class="heading ink" x="28" y="38">DLI removes a recurrence ceiling; it does not move the roof</text>
+  <text class="muted" x="28" y="62">Schematic roofline: arithmetic intensity is unchanged by packing.</text>
+  <rect class="plot" x="100" y="88" width="790" height="285"/>
+  <g class="grid"><path d="M100 159h790M100 230h790M100 301h790M258 88v285M416 88v285M574 88v285M732 88v285"/></g>
+  <path class="axis" d="M100 88v285h790"/>
+  <path class="memory" d="M112 350L520 112"/>
+  <path class="compute" d="M520 112H875"/>
+  <path class="latency" d="M112 312H485"/>
+  <text class="label" fill="#389826" x="260" y="244" transform="rotate(-30 260 244)">memory-bandwidth roof: I × B</text>
+  <text class="label" fill="#4063d8" x="690" y="103">compute roof</text>
+  <text class="label" fill="#cb3c33" x="118" y="303">effective scalar recurrence ceiling</text>
+
+  <circle class="scalar" cx="330" cy="312" r="8"/><text class="label ink" x="345" y="333">scalar chain</text>
+  <path class="gain" d="M330 298V181"/>
+  <circle class="dli" cx="330" cy="173" r="9"/><text class="label ink" x="306" y="143" text-anchor="end">DLI: SIMD/ILP exposed</text>
+  <circle class="threaded" cx="330" cy="246" r="7" opacity="0"/>
+  <text class="muted" x="306" y="162" text-anchor="end">same FLOP/byte, higher useful issue rate</text>
+
+  <circle class="scalar" cx="650" cy="130" r="7"/><text class="label ink" x="665" y="151">already-vectorized stencil</text>
+  <text class="muted" x="665" y="169">little headroom for DLI</text>
+
+  <text class="ink" x="495" y="420" text-anchor="middle">arithmetic intensity I = work / memory traffic →</text>
+  <text class="ink" x="28" y="231" text-anchor="middle" transform="rotate(-90 28 231)">attainable throughput</text>
+  <text class="muted" x="880" y="399" text-anchor="end">conceptual — ceilings must be measured per machine</text>
+</svg>

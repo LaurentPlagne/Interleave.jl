@@ -1,0 +1,21 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 6'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate benchmark environment
+        run: julia --project=bench -e 'using Pkg; Pkg.instantiate()'
+      - name: Run benchmark smoke test
+        run: julia --project=bench bench/runall.jl
+

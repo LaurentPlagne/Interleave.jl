@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 480" role="img" aria-labelledby="title desc">
+  <title id="title">Measured fit map for Data Layout Interleaving</title>
+  <desc id="desc">Recurrence-heavy kernels with low scalar reference throughput gain fifteen to nineteen times. Kernels already auto-vectorized at over forty gigaflops per second remain near parity.</desc>
+  <style>
+    :root { color-scheme:light dark; }
+    .bg { fill:#fff; stroke:#d0d7de; }.plot { fill:#f6f8fa; stroke:#8c959f; }
+    .ink { fill:#1f2328; }.muted { fill:#57606a; }.grid { stroke:#d8dee4; stroke-width:1; }
+    .axis { stroke:#57606a; stroke-width:1.5; }.rec { fill:#4063d8; }.auto { fill:#cb3c33; }
+    .zone { fill:#389826; opacity:.08; }.divider { stroke:#8c959f; stroke-dasharray:6 5; }
+    text { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:12px; }
+    .heading { font-size:19px; font-weight:700; }.label { font-size:12px; font-weight:650; }
+    @media (prefers-color-scheme:dark) {
+      .bg { fill:#0d1117; stroke:#30363d; }.plot { fill:#161b22; stroke:#6e7681; }
+      .ink { fill:#f0f6fc; }.muted { fill:#9da7b3; }.grid { stroke:#30363d; }.axis { stroke:#9da7b3; }
+    }
+  </style>
+  <rect class="bg" x="1" y="1" width="818" height="478" rx="8"/>
+  <text class="heading ink" x="28" y="34">The reference kernel predicts whether DLI will pay</text>
+  <text class="muted" x="28" y="55">Apple M1, Julia 1.13.0, Float32; sequential DLI, measured 15 Sep 2026.</text>
+  <rect class="plot" x="88" y="78" width="654" height="318"/>
+  <rect class="zone" x="88" y="78" width="131" height="318"/>
+  <line class="divider" x1="219" y1="78" x2="219" y2="396"/>
+  <g class="grid">
+    <line x1="88" y1="396" x2="742" y2="396"/><line x1="88" y1="316.5" x2="742" y2="316.5"/>
+    <line x1="88" y1="237" x2="742" y2="237"/><line x1="88" y1="157.5" x2="742" y2="157.5"/><line x1="88" y1="78" x2="742" y2="78"/>
+    <line x1="88" y1="78" x2="88" y2="396"/><line x1="219" y1="78" x2="219" y2="396"/>
+    <line x1="350" y1="78" x2="350" y2="396"/><line x1="481" y1="78" x2="481" y2="396"/>
+    <line x1="612" y1="78" x2="612" y2="396"/><line x1="742" y1="78" x2="742" y2="396"/>
+  </g>
+  <g class="axis"><line x1="88" y1="396" x2="742" y2="396"/><line x1="88" y1="78" x2="88" y2="396"/></g>
+  <g class="muted">
+    <text x="88" y="415" text-anchor="middle">0</text><text x="219" y="415" text-anchor="middle">10</text>
+    <text x="350" y="415" text-anchor="middle">20</text><text x="481" y="415" text-anchor="middle">30</text>
+    <text x="612" y="415" text-anchor="middle">40</text><text x="742" y="415" text-anchor="middle">50</text>
+    <text x="74" y="400" text-anchor="end">0×</text><text x="74" y="321" text-anchor="end">5×</text>
+    <text x="74" y="241" text-anchor="end">10×</text><text x="74" y="162" text-anchor="end">15×</text><text x="74" y="82" text-anchor="end">20×</text>
+  </g>
+  <text class="ink" x="415" y="452" text-anchor="middle">scalar reference throughput (GFlop/s)</text>
+  <text class="ink" transform="translate(22 238) rotate(-90)" text-anchor="middle">best sequential DLI speedup</text>
+
+  <circle class="rec" cx="102" cy="88" r="7"/><text class="label ink" x="114" y="105">Thomas 19.38×</text>
+  <circle class="rec" cx="126" cy="154" r="7"/><text class="label ink" x="138" y="149">biquad 15.19×</text>
+  <circle class="rec" cx="112" cy="118" r="7"/><text class="label ink" x="124" y="133">Black–Scholes 17.51×</text>
+  <rect class="auto" x="619" y="373" width="13" height="13" transform="rotate(45 625.5 379.5)"/>
+  <text class="label ink" x="568" y="361">depthwise 1.03×</text>
+  <rect class="auto" x="645" y="374" width="13" height="13" transform="rotate(45 651.5 380.5)"/>
+  <text class="label ink" x="659" y="385">Sobel 0.99×</text>
+</svg>
