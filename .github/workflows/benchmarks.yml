@@ -86,10 +86,17 @@ jobs:
         run: julia --project=gpu/vulkan -e 'using Pkg; Pkg.instantiate()'
       - name: Compile and validate SPIR-V ABI
         run: julia --project=gpu/vulkan gpu/vulkan/compile.jl
+      - name: Run direct Vulkan Thomas smoke test
+        continue-on-error: true
+        run: |
+          julia --project=gpu/vulkan gpu/vulkan/thomas.jl | tee vulkan-thomas.txt
+          cat vulkan-thomas.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: interleave-vulkan-spirv
-          path: gpu/vulkan/shaders/thomas.spv
+          path: |
+            gpu/vulkan/shaders/thomas.spv
+            vulkan-thomas.txt
 
   # A real Vulkan performance measurement needs a self-hosted runner with a
   # labelled GPU. Enable this job by setting the repository variable
