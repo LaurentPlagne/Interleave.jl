@@ -173,3 +173,18 @@ function thomas_lines!(X, D, U, L, B, S)
     end
     X
 end
+
+# GPU test entry points.  KernelAbstractions can inline a named, concrete callable on
+# every backend; closures capturing tuples or integers are deliberately kept out of the
+# device launch path.  These wrappers still call the very same scalar kernels above, so
+# the GPU suite exercises source reuse rather than a second implementation.
+const GPU_BIQUAD_COEFFS = (0.2f0, 0.4f0, 0.2f0, -0.3f0, 0.1f0)
+const GPU_DEPTHWISE_WEIGHTS = Float32.((1, 2, 1, 2, 4, 2, 1, 2, 1) ./ 16)
+const GPU_SOBEL_WEIGHTS = (0.7f0, 0.3f0)
+const GPU_BLACKSCHOLES_NT = 8
+
+@inline gpu_biquad!(Y, X) = biquad!(Y, X, GPU_BIQUAD_COEFFS)
+@inline gpu_depthwise3x3!(out, inp) = depthwise3x3!(out, inp, GPU_DEPTHWISE_WEIGHTS)
+@inline gpu_sobel_motion!(out, curr, prev) = sobel_motion!(out, curr, prev, GPU_SOBEL_WEIGHTS)
+@inline gpu_blackscholes_cn!(V, D, U, L, RHS, S) =
+    blackscholes_cn!(V, D, U, L, RHS, S, GPU_BLACKSCHOLES_NT)

@@ -503,6 +503,64 @@ end
         @test gpu_apply!(identity, zeros(T, 0, nx); wait = true) isa Matrix{T}
     end
 
+    @testset "driver GPU — tous les noyaux de validation" begin
+        # Le backend CPU de KernelAbstractions exécute le même chemin de lancement que
+        # Metal/CUDA. Chaque entrée est une fonction nommée, afin que le compilateur GPU
+        # puisse l'inliner sans dépendre d'une closure capturante.
+        nb, ns = 7, 19
+        X = fill(T(1), nb, ns); Y = zeros(T, nb, ns)
+        ref = copy(Y); apply!(gpu_biquad!, ref, X)
+        gpu_apply!(gpu_biquad!, Y, X; wait = true)
+        @test Y == ref
+
+        H, W = 9, 8
+        I = fill(T(1), nb, H, W); O = zeros(T, nb, H, W)
+        ref = copy(O); apply!(gpu_depthwise3x3!, ref, I)
+        gpu_apply!(gpu_depthwise3x3!, O, I; wait = true)
+        @test O == ref
+
+        C = fill(T(2), nb, H, W); P = fill(T(0.5), nb, H, W)
+        O .= 0; ref .= 0
+        apply!(gpu_sobel_motion!, ref, C, P)
+        gpu_apply!(gpu_sobel_motion!, O, C, P; wait = true)
+        @test O == ref
+
+        ngrid = 13
+        V = [max(T(i) - T(b) / 10, 0) for b in 1:nb, i in 1:ngrid]
+        D = fill(T(2.05), nb, ngrid); U = fill(T(-0.5), nb, ngrid)
+        L = fill(T(-0.5), nb, ngrid); R = zeros(T, nb, ngrid)
+        S = zeros(T, nb, ngrid); Vref = copy(V); Rref = copy(R); Sref = copy(S)
+        apply!(gpu_blackscholes_cn!, Vref, D, U, L, Rref; scratch = Sref)
+        gpu_apply!(gpu_blackscholes_cn!, V, D, U, L, R; scratch = S, wait = true)
+        @test V == Vref
+
+        n1, n2, n3 = 6, 7, 8
+        I3 = [T(b) + T(i) / 10 + T(j) / 100 + T(k) / 1000
+              for b in 1:nb, i in 1:n1, j in 1:n2, k in 1:n3]
+        O3 = zeros(T, nb, n1, n2, n3); R3 = copy(O3)
+        apply!(laplacien3d!, R3, I3)
+        gpu_apply!(laplacien3d!, O3, I3; wait = true)
+        @test O3 == R3
+
+        nx, m = 11, 3
+        XL = zeros(T, nb, nx, m); DL = fill(T(2), nb, nx, m)
+        UL = fill(T(-1), nb, nx, m); LL = fill(T(-1), nb, nx, m)
+        BL = [sinpi(T(b) / 8) + T(i + c) / nx for b in 1:nb, i in 1:nx, c in 1:m]
+        SL = zeros(T, nb, nx); XLref = copy(XL); SLref = copy(SL)
+        # A single device work item sees a (nx,m) instance and a (nx) scratch row.
+        for b in 1:nb
+            thomas_lines!(view(XLref, b, :, :), view(DL, b, :, :), view(UL, b, :, :),
+                          view(LL, b, :, :), view(BL, b, :, :), view(SLref, b, :))
+        end
+        gpu_apply!(thomas_lines!, XL, DL, UL, LL, BL; scratch = SL, wait = true)
+        @test XL == XLref
+
+        R = zeros(T, nb, ngrid); Xr = fill(T(0.25), nb, ngrid)
+        ref = copy(R); apply!(tridiag_mul!, ref, D, U, L, Xr)
+        gpu_apply!(tridiag_mul!, R, D, U, L, Xr; wait = true)
+        @test R == ref
+    end
+
     @testset "apply! ne parallélise pas" begin
         # Contrat : le parallélisme doit être visible au point d'appel. `apply!` n'a
         # aucun mot-clé qui l'autoriserait — c'est vérifié structurellement, pas par

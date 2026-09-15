@@ -20,8 +20,10 @@ choose `P=1`.
 
 - `apply!` traverses packets sequentially and never launches tasks.
 - `parallel_apply!` adds explicit task parallelism.
-- `gpu_apply!` maps one sequential problem to each GPU work item; Metal is executable,
-  while the Vulkan/SPIR-V path currently fixes and validates the shader ABI.
+- `gpu_apply!` maps one sequential problem to each GPU work item through
+  KernelAbstractions; the same scalar Julia kernels used by the tests run on Metal.
+  The Vulkan/SPIR-V directory remains an ABI prototype and is not presented as a second
+  automatic backend.
 - Results are tested for exact scalar-to-packed agreement.
 - Packet size is a tuning parameter to measure, not a performance guarantee.
 
@@ -31,15 +33,15 @@ Start with the visual [documentation and tutorials](docs/src/index.md), especial
 kernels with animations, complete performance tables, and comparisons with alternative
 compiler, library, threaded, and GPU approaches.
 
-The experimental [GPU design and tutorial](docs/src/manual/gpu.md) explain the Metal
-driver, batch-major device layout, and the deliberately lower-level Vulkan/SPIR-V
-prototype.
+The experimental [GPU design and tutorial](docs/src/manual/gpu.md) explain the
+KernelAbstractions driver, batch-major device layout, the all-kernel Metal validation
+suite, and the deliberately lower-level Vulkan/SPIR-V prototype.
 
 ## Reproducible target benchmarks
 
 The GitHub Actions workflow `Cross-platform benchmarks` can be launched manually, on a
-release, or weekly. It runs the CPU suite on Linux and Apple Silicon, measures the resident
-Metal Thomas kernel on macOS, and compiles/validates the Vulkan SPIR-V ABI on Linux. The
+release, or weekly. It runs the CPU suite on Linux and Apple Silicon, benchmarks every
+  validation kernel on Metal macOS, and compiles/validates the Vulkan SPIR-V ABI on Linux. The
 results and raw logs are uploaded as workflow artifacts. A real Vulkan throughput job is
 reserved for a self-hosted runner labelled `linux`, `vulkan`, and `gpu`; the standard GitHub
 hosted Linux runner is used only for software validation and must not be presented as a GPU

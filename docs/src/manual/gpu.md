@@ -38,11 +38,13 @@ gpu_synchronize(dX)
 result = Array(dX)
 ```
 
-The `thomas!` function can be the same scalar Julia function used by [`apply!`](@ref).
-The driver creates a small, allocation-free instance object inside every work item and
-passes those objects to the function. See the complete runnable
-[`gpu/metal/thomas.jl`](https://github.com/laurentplagne/Interleave.jl/blob/main/gpu/metal/thomas.jl)
-prototype.
+The `thomas!` function is the same scalar Julia function used by [`apply!`](@ref). The
+driver creates a small, allocation-free instance object inside every work item and passes
+those objects to the function. The same contract is exercised for Thomas, biquad,
+depthwise convolution, Sobel plus motion, Black–Scholes, a 3-D Laplacian, Thomas line
+sweeps, and tridiagonal products by the runnable
+[`gpu/metal/all.jl`](https://github.com/laurentplagne/Interleave.jl/blob/main/gpu/metal/all.jl)
+suite.
 
 There is one important qualification to “the same kernel”: Metal's compiler accepts a
 restricted, statically dispatched subset of Julia. Device code cannot allocate, throw,
@@ -96,7 +98,8 @@ considered. It is a compiler project, not a container change.
 The repository workflow mirrors the multi-target structure used by Legolas++:
 
 - Linux x86-64 runs the complete `BenchmarkTools` CPU suite;
-- macOS 14 on Apple Silicon runs the same CPU suite and a resident Metal Thomas benchmark;
+- macOS 14 on Apple Silicon runs the same CPU suite and all validation kernels through
+  the resident Metal KernelAbstractions driver;
 - Linux validates the Vulkan 1.2 shader and its SPIR-V ABI using Mesa's software runtime;
 - an optional self-hosted `linux,vulkan,gpu` job is reserved for real Vulkan throughput once
   the host dispatcher exists.

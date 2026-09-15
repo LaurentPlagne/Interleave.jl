@@ -59,13 +59,17 @@ jobs:
       - name: Run resident Metal benchmark
         run: |
           julia --project=gpu/metal gpu/metal/thomas.jl | tee macos-metal.txt
-          cat macos-metal.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Run all KernelAbstractions kernels on Metal
+        run: |
+          julia --project=gpu/metal gpu/metal/all.jl | tee macos-metal-all.txt
+          cat macos-metal.txt macos-metal-all.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: interleave-macos-cpu-metal
           path: |
             macos-cpu.txt
             macos-metal.txt
+            macos-metal-all.txt
 
   vulkan-abi:
     name: Vulkan/SPIR-V shader validation / Linux

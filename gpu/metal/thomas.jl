@@ -2,26 +2,10 @@ using Interleave
 using Metal
 using BenchmarkTools
 
-# This is ordinary scalar Julia. The same function can be passed to `apply!` on the
-# CPU and to `gpu_apply!` on Metal.
-function thomas!(X, D, U, L, B, S)
-    @inbounds begin
-        s = D[1]
-        sm1 = inv(s)
-        X[1] = B[1] * sm1
-        for i in 2:length(X)
-            S[i] = U[i - 1] * sm1
-            s = D[i] - L[i] * S[i]
-            X[i] = B[i] - L[i] * X[i - 1]
-            sm1 = inv(s)
-            X[i] *= sm1
-        end
-        for i in (length(X) - 1):-1:1
-            X[i] -= S[i + 1] * X[i + 1]
-        end
-    end
-    X
-end
+# Use the same scalar kernel as the CPU tests and the all-kernel Metal suite.  The
+# KernelAbstractions driver, rather than a hand-written Metal shader, supplies the
+# one-work-item-per-batch mapping.
+include(joinpath(@__DIR__, "..", "..", "test", "kernels.jl"))
 
 function main(; nbatch = 65_536, nx = 64, workgroupsize = 256)
     Metal.functional() || error("Metal.jl did not find a supported Apple GPU")
