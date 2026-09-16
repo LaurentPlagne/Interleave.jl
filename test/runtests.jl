@@ -702,10 +702,11 @@ end
             ref = permutedims(src, perm)
             @test size(B) == size(ref)
             @test all(B[J...] === ref[J...] for J in idx)
-            # Le chemin rapide doit coïncider avec le repli générique, bit à bit.
+            # Le chemin rapide doit coïncider bit à bit avec le repli, qui délègue à Base.
             G = Interleave.Array{T,3,8}(undef, dims...)
             Interleave._generic_permutedims!(G, A, perm)
             @test all(B[J...] === G[J...] for J in idx)
+            @test all(G[J...] === ref[J...] for J in idx)
             # Les lanes de padding restent initialisées.
             nv = 8 - Interleave.npadding(B)
             nv < 8 && @test all(iszero, view(B.flat, nv+1:8, :, :, Interleave.npacks(B)))

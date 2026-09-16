@@ -110,20 +110,13 @@ function Base.permutedims!(dest::Array{T,N,P}, src::Array{T,N,P},
     _generic_permutedims!(dest, src, perm)
 end
 
-# Le repli : correct pour toute permutation, simplement plus lent. On le garde explicite
-# plutôt que d'appeler `invoke`, pour que le chemin lent soit lisible et testable.
+# Le repli délègue à Base. Une première version le réimplémentait « pour que le chemin lent
+# soit lisible » — c'était une mauvaise idée : Base traite déjà correctement le cas général
+# (vérifié), et ma réécriture y a introduit un bug de convention en utilisant `perm` au lieu de
+# `invperm(perm)`. Invisible sur une transposition, où les deux coïncident ; faux sur un
+# 3-cycle, c'est-à-dire précisément la permutation qu'un cycle ADI rend inévitable.
 #
-# ⚠️ La convention de Base est `dest[J] == src[J[invperm(perm)]]`, avec
-# `size(dest) == size(src)[perm]`. Une première version utilisait `perm` au lieu de son
-# inverse : pour une TRANSPOSITION les deux coïncident, donc c'était juste par accident, et
-# les trois cas testés — (2,1,3), (3,2,1), (1,3,2) — étaient tous des involutions. Le bug
-# n'apparaissait que sur un 3-cycle, c'est-à-dire exactement la permutation qu'un cycle ADI
-# complet rend inévitable (voir la note de parité ci-dessous).
-function _generic_permutedims!(dest::Array{T,N}, src::Array{T,N}, perm) where {T,N}
-    ip = invperm(collect(perm))
-    @inbounds for J in CartesianIndices(dest)
-        t = Tuple(J)
-        dest[t...] = src[ntuple(k -> t[ip[k]], Val(N))...]
-    end
-    dest
-end
+# La leçon est générale : ne pas réécrire ce que Base fait bien pour se donner un point de
+# comparaison. Le point de comparaison, c'est Base.
+_generic_permutedims!(dest, src, perm) =
+    invoke(Base.permutedims!, Tuple{AbstractArray,AbstractArray,Any}, dest, src, perm)

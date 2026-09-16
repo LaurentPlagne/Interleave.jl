@@ -102,15 +102,17 @@ in place.
 A full cycle needs three repacks, and they cost very differently. With the layouts above —
 `X = (y,x,z)`, `Y = (x,y,z)`, `Z = (x,z,y)` — on a 128×128×64 grid, `P = 8`:
 
-| transition | `perm` | batch axis | shape | time |
-|---|---|---|---|---:|
-| X → Y | `(2,1,3)` | moves | transposition | 0.48 ms |
-| Y → Z | `(1,3,2)` | **stays** | instance-only | **0.15 ms** |
-| Z → X | `(3,1,2)` | moves | **3-cycle** | 0.86 ms |
+| transition | `perm` | batch axis | shape | Base fallback | specialised |
+|---|---|---|---|---:|---:|
+| X → Y | `(2,1,3)` | moves | transposition | 1.21 ms | 0.59 ms |
+| Y → Z | `(1,3,2)` | **stays** | instance-only | 2.01 ms | **0.16 ms** |
+| Z → X | `(3,1,2)` | moves | 3-cycle | 1.25 ms | 0.53 ms |
+| | | | **total** | **4.47 ms** | **1.28 ms** |
 
-A factor of **5.7 between the cheapest and the dearest**. The batch axis is what decides: when
-it stays put, no lane crosses a packet and the whole thing is a `permutedims!` on the packed
-storage.
+A factor of **3.7 between the cheapest and the dearest** specialised transition. The batch axis
+is what decides: when it stays put, no lane crosses a packet and the whole thing is a
+`permutedims!` on the packed storage — which is also where the specialisation pays most, 12×,
+because the generic path cannot know that the packets are untouched.
 
 !!! note "One expensive transition is unavoidable, by parity"
     It is tempting to look for layouts where every transition is cheap. There are none, and
@@ -129,32 +131,33 @@ storage.
 
 ## 6. What repacking costs over a whole cycle
 
-Same grid, same machine, one full cycle: three sweeps and three repacks.
+Three sweeps and three repacks, same grid and machine. The baseline is Base's own generic
+`permutedims!`, which is what you get without the specialisation:
 
-| | time | in Thomas sweeps |
+| | time | share of the cycle |
 |---|---:|---:|
-| one line-solve sweep | 1.66 ms | 1.00 |
-| the three repacks, generic fallback | 10.22 ms | 6.2 |
-| **the three repacks, specialised** | **1.52 ms** | **0.9** |
+| three line-solve sweeps | 5.05 ms | — |
+| repacks, Base fallback | 4.47 ms | **47%** |
+| repacks, specialised | 1.28 ms | 20% |
 
-| | cycle | share spent repacking |
-|---|---:|---:|
-| generic fallback | 15.19 ms | **67%** |
-| specialised | 6.48 ms | 23% |
+| | cycle |
+|---|---:|
+| Base fallback | 9.52 ms |
+| specialised | **6.33 ms** |
 
-Repacking was consuming two thirds of the cycle and is now under a quarter — a **57%
-improvement on the whole cycle**, for a change no kernel sees. The generic path is especially
-bad on the 3-cycle, which is exactly the transition no layout choice can avoid.
+A **34% improvement on the whole cycle**, for a change no kernel sees.
 
-For a single transposition the specialised path is 0.47 ms against a 0.40 ms floor, the floor
-being `permutedims!` on an equivalent `Base.Array` — the same bytes moved, no packets
-involved. There is little left to win there; the remaining headroom is in the 3-cycle.
+!!! warning "An earlier revision of this page claimed 57%"
+    It was measured against a hand-written fallback in this package rather than against Base's.
+    That reimplementation was both slower than Base's and, as it turned out, wrong on 3-cycles.
+    It has been deleted and the fallback now delegates to Base, which is the honest baseline:
+    what a user actually gets without the specialisation. The real figure is 34%.
 
 !!! tip "Is it worth fusing the transpose into the solve?"
     A natural next idea is to skip the separate pass entirely: read from the previous layout
     and write straight into the next one. The table above bounds what that could buy. Even a
     *perfect* fusion, with the repack costing literally nothing, would take the cycle from
-    6.48 ms to 4.97 ms — **23% more**, against the 57% the specialised repack already
+    6.33 ms to 5.05 ms — **20% more**, against the 34% the specialised repack already
     captured.
 
     And that bound is optimistic. Fusing means the sweep reads or writes across the packed
