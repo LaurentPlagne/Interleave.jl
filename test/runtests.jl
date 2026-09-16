@@ -42,6 +42,26 @@ function thomas_setup(nbatch, nx; pack = Val(P))
     X, D, U, L, B
 end
 
+# Données non uniformes, déterministes, variant selon **tous** les axes — le lot compris.
+#
+# Une entrée constante vide la plupart des comparaisons de leur contenu : un Sobel d'image
+# constante vaut zéro partout, et surtout une image constante est invariante par
+# transposition, donc une inversion d'indices `i`/`j` dans un noyau ou dans la vue device
+# passerait inaperçue. Les poids impairs décorrèlent les axes entre eux.
+function varied(dims::Vararg{Int,N}; seed = 0) where {N}
+    w = ntuple(i -> T(2i - 1), Val(N))
+    [T(sinpi((sum(w .* Tuple(I)) + seed) / 23)) for I in CartesianIndices(dims)]
+end
+
+"""Système tridiagonal batch-major non uniforme, à diagonale strictement dominante."""
+function varied_tridiag(nb, nx)
+    D = T(4) .+ varied(nb, nx; seed = 1)          # |D| ≥ 3
+    U = T(-1) .+ T(0.25) .* varied(nb, nx; seed = 2)   # |U| + |L| ≤ 2.5
+    L = T(-1) .+ T(0.25) .* varied(nb, nx; seed = 3)
+    B = varied(nb, nx; seed = 4)
+    D, U, L, B
+end
+
 @testset "Interleave.jl" begin
 
     @testset "invariants de construction" begin
@@ -556,9 +576,11 @@ end
     @testset "driver GPU — contrat batch-major sur backend CPU" begin
         # Le backend CPU de KernelAbstractions teste exactement le wrapper et le noyau
         # de lancement employés sur Metal, sans rendre la suite dépendante d'un GPU.
+        # `nb` non multiple du `workgroupsize` : c'est le cas qui exerce la garde
+        # `batch <= nbatch` du noyau de lancement (AGENTS.md §4).
         nb, nx = 23, 16
-        std(v) = fill(T(v), nb, nx)
-        X, D, U, L, B, S = std(0), std(2), std(-1), std(-1), std(1), std(0)
+        D, U, L, B = varied_tridiag(nb, nx)
+        X, S = zeros(T, nb, nx), zeros(T, nb, nx)
         ref = copy(X)
         apply!(thomas!, ref, D, U, L, B; scratch = zeros(T, nx))
 
@@ -569,11 +591,16 @@ end
         @test gpu_synchronize(X) === nothing
 
         # Une instance 2-D conserve ses indices naturels dans le noyau utilisateur.
-        O, I = zeros(T, nb, 6, 5), fill(T(1), nb, 6, 5)
+        # L'image est non uniforme et H ≠ W : une transposition `i`/`j` dans la vue device
+        # produirait donc une erreur de forme ou un résultat faux, au lieu de passer.
+        O, I = zeros(T, nb, 6, 5), varied(nb, 6, 5; seed = 5)
         w = T.((1, 2, 1, 2, 4, 2, 1, 2, 1) ./ 16)
+        Oref = copy(O)
+        apply!((o, i) -> depthwise3x3!(o, i, w), Oref, I)
         gpu_apply!((o, i) -> depthwise3x3!(o, i, w), O, I;
                    workgroupsize = 8, wait = true)
-        @test all(==(1), O[b, i, j] for b in 1:nb, i in 2:5, j in 2:4)
+        @test O == Oref
+        @test any(!iszero, O)          # la comparaison ci-dessus doit avoir du contenu
 
         @test_throws ArgumentError gpu_apply!(thomas!)
         @test_throws ArgumentError gpu_apply!(thomas!, X, D; workgroupsize = 0)
@@ -587,23 +614,31 @@ end
         # Le backend CPU de KernelAbstractions exécute le même chemin de lancement que
         # Metal/CUDA. Chaque entrée est une fonction nommée, afin que le compilateur GPU
         # puisse l'inliner sans dépendre d'une closure capturante.
+        # Toutes les entrées varient selon le lot ET selon les axes d'instance. Avec des
+        # tableaux constants, un mélange de lanes, une transposition d'indices ou un Sobel
+        # identiquement nul passeraient tous les trois sans être vus.
         nb, ns = 7, 19
-        X = fill(T(1), nb, ns); Y = zeros(T, nb, ns)
+        X = varied(nb, ns; seed = 6); Y = zeros(T, nb, ns)
         ref = copy(Y); apply!(gpu_biquad!, ref, X)
         gpu_apply!(gpu_biquad!, Y, X; wait = true)
         @test Y == ref
+        @test any(!iszero, Y)
 
         H, W = 9, 8
-        I = fill(T(1), nb, H, W); O = zeros(T, nb, H, W)
+        I = varied(nb, H, W; seed = 7); O = zeros(T, nb, H, W)
         ref = copy(O); apply!(gpu_depthwise3x3!, ref, I)
         gpu_apply!(gpu_depthwise3x3!, O, I; wait = true)
         @test O == ref
+        @test any(!iszero, O)
 
-        C = fill(T(2), nb, H, W); P = fill(T(0.5), nb, H, W)
+        C = varied(nb, H, W; seed = 8); P = varied(nb, H, W; seed = 9)
         O .= 0; ref .= 0
         apply!(gpu_sobel_motion!, ref, C, P)
         gpu_apply!(gpu_sobel_motion!, O, C, P; wait = true)
         @test O == ref
+        # Un Sobel d'image constante vaut zéro partout : sans cette garde, la comparaison
+        # ci-dessus serait satisfaite par deux tableaux nuls.
+        @test any(!iszero, O)
 
         ngrid = 13
         V = [max(T(i) - T(b) / 10, 0) for b in 1:nb, i in 1:ngrid]

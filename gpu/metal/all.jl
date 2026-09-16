@@ -35,6 +35,26 @@ const BACKEND_AVAILABLE = backend_functional()
 
 const T = Float32
 
+# Données non uniformes, déterministes, variant selon **tous** les axes — le lot compris.
+#
+# Les entrées constantes qu'utilisait cette suite rendaient plusieurs cas vides de contenu :
+# un Sobel d'image constante vaut zéro partout, et une image constante est invariante par
+# transposition, donc une inversion d'indices dans la vue device passait inaperçue. La
+# comparaison au calcul CPU était alors satisfaite par deux tableaux nuls.
+function _varied(dims::Vararg{Int,N}; seed = 0) where {N}
+    w = ntuple(i -> T(2i - 1), Val(N))
+    [T(sinpi((sum(w .* Tuple(I)) + seed) / 23)) for I in CartesianIndices(dims)]
+end
+
+"""Système tridiagonal batch-major non uniforme, à diagonale strictement dominante."""
+function _varied_tridiag(dims::Vararg{Int,N}; seed = 0) where {N}
+    D = T(4) .+ _varied(dims...; seed = seed + 1)          # |D| ≥ 3
+    U = T(-1) .+ T(0.25) .* _varied(dims...; seed = seed + 2)   # |U| + |L| ≤ 2.5
+    L = T(-1) .+ T(0.25) .* _varied(dims...; seed = seed + 3)
+    B = _varied(dims...; seed = seed + 4)
+    D, U, L, B
+end
+
 function _host_reference(f, host, scratch)
     result = copy(first(host))
     args = (result, Base.tail(host)...)
@@ -70,6 +90,10 @@ function _case(name, f, host; scratch = nothing, rtol = 5f-5)
     err = maximum(abs, got .- reference)
     scale = max(maximum(abs, reference), 1f0)
     err <= rtol * scale || error("$name: max error $err exceeds $(rtol * scale)")
+    # Une référence identiquement nulle satisferait la comparaison ci-dessus quel que soit
+    # le résultat GPU. Le cas s'est produit tant que les entrées étaient constantes.
+    any(!iszero, reference) ||
+        error("$name: the CPU reference is identically zero, so the check proves nothing")
 
     # Reset all device buffers before every sample, outside the timed region.  Several
     # kernels are in-place recurrences; without this setup each sample would solve the
@@ -94,47 +118,51 @@ function main()
         println("$(KA_BACKEND) KernelAbstractions suite skipped (no functional GPU on this runner)")
         return nothing
     end
-    nb, nx = 4_096, 64
-    X = fill(T(1), nb, nx); D = fill(T(2), nb, nx)
-    U = fill(T(-1), nb, nx); L = fill(T(-1), nb, nx)
-    B = [sinpi(T(b) / 8) + T(i) / nx for b in 1:nb, i in 1:nx]
+    # Tous les lots sont volontairement **non multiples** du `workgroupsize` (256 par
+    # défaut) : c'est le cas qui exerce la garde `batch <= nbatch` du noyau de lancement,
+    # et celui qu'aucune taille de cette suite ne touchait auparavant.
+    nb, nx = 4_093, 64
+    D, U, L, B = _varied_tridiag(nb, nx)
     _case("Thomas", thomas!, (zeros(T, nb, nx), D, U, L, B);
           scratch = zeros(T, nb, nx))
 
-    nb, ns = 1_024, 256
-    _case("Biquad", gpu_biquad!, (zeros(T, nb, ns), fill(T(1), nb, ns)))
+    nb, ns = 1_021, 256
+    _case("Biquad", gpu_biquad!, (zeros(T, nb, ns), _varied(nb, ns; seed = 10)))
 
-    nb, H, W = 256, 64, 64
+    # H ≠ W : une transposition d'indices dans la vue device ne peut plus passer.
+    nb, H, W = 251, 64, 48
     _case("Depthwise 3x3", gpu_depthwise3x3!,
-          (zeros(T, nb, H, W), fill(T(1), nb, H, W)))
+          (zeros(T, nb, H, W), _varied(nb, H, W; seed = 11)))
     _case("Sobel + motion", gpu_sobel_motion!,
-          (zeros(T, nb, H, W), fill(T(1), nb, H, W), fill(T(0.5), nb, H, W)))
+          (zeros(T, nb, H, W), _varied(nb, H, W; seed = 12),
+           _varied(nb, H, W; seed = 13)))
 
-    nopt, ngrid = 1_024, 32
+    nopt, ngrid = 1_019, 32
     V = [max(T(i) - T(b) / 100, 0) for b in 1:nopt, i in 1:ngrid]
-    D = fill(T(2.05), nopt, ngrid); U = fill(T(-0.5), nopt, ngrid)
-    L = fill(T(-0.5), nopt, ngrid); R = zeros(T, nopt, ngrid)
+    D = T(2.05) .+ T(0.2) .* _varied(nopt, ngrid; seed = 14)      # |D| ≥ 1.85
+    U = T(-0.5) .+ T(0.1) .* _varied(nopt, ngrid; seed = 15)      # |U| + |L| ≤ 1.2
+    L = T(-0.5) .+ T(0.1) .* _varied(nopt, ngrid; seed = 16)
+    R = zeros(T, nopt, ngrid)
     _case("Black-Scholes CN", gpu_blackscholes_cn!, (V, D, U, L, R);
           scratch = zeros(T, nopt, ngrid), rtol = 2f-4)
 
-    nb, n1, n2, n3 = 128, 24, 24, 16
-    I3 = [T(b) + T(i) / 10 + T(j) / 100 + T(k) / 1000
-          for b in 1:nb, i in 1:n1, j in 1:n2, k in 1:n3]
-    _case("Laplacian 3D", laplacien3d!, (zeros(T, nb, n1, n2, n3), I3))
+    # Trois extents distincts : un échange d'axes est détectable par la forme elle-même.
+    nb, n1, n2, n3 = 127, 24, 20, 16
+    _case("Laplacian 3D", laplacien3d!,
+          (zeros(T, nb, n1, n2, n3), _varied(nb, n1, n2, n3; seed = 17)))
 
-    nb, nx, m = 256, 32, 3
-    D = fill(T(2), nb, nx, m); U = fill(T(-1), nb, nx, m)
-    L = fill(T(-1), nb, nx, m)
-    B = [sinpi(T(b) / 8) + T(i + c) / nx for b in 1:nb, i in 1:nx, c in 1:m]
+    nb, nx, m = 253, 32, 3
+    D, U, L, B = _varied_tridiag(nb, nx, m; seed = 20)
     _case("Thomas lines", thomas_lines!, (zeros(T, nb, nx, m), D, U, L, B);
           scratch = zeros(T, nb, nx))
 
     _case("Tridiagonal product", tridiag_mul!,
-          (zeros(T, nb, nx), D[:, :, 1], U[:, :, 1], L[:, :, 1], fill(T(0.25), nb, nx)))
+          (zeros(T, nb, nx), D[:, :, 1], U[:, :, 1], L[:, :, 1],
+           _varied(nb, nx; seed = 24)))
 
-    nb, n = 1_024, 256
-    A = [sinpi(T(b) / 17) + T(i) / n for b in 1:nb, i in 1:n]
-    B = [cospi(T(b) / 23) - T(i) / (2n) for b in 1:nb, i in 1:n]
+    nb, n = 1_021, 256
+    A = _varied(nb, n; seed = 25)
+    B = _varied(nb, n; seed = 26)
     _case("Squared norm", batch_squarednorm!, (zeros(T, nb, 1), A))
     _case("Dot product", batch_dot!, (zeros(T, nb, 1), A, B))
     println("$(KA_BACKEND) KernelAbstractions suite passed")
