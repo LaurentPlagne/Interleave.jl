@@ -4,7 +4,9 @@
 narrower and more useful question, kernel by kernel: **if Interleave did not exist, what would
 you actually write, and would you be worse off?**
 
-Two of the six answers are "you would be better off". Those are the important ones.
+Two of the six answers are "you would be better off". Those are the important ones. Where a
+competing package exists, it is **measured** rather than characterised — see the DSP.jl table
+below, which corrects an earlier unmeasured claim on this page.
 
 ## Where the numbers come from
 
@@ -56,19 +58,49 @@ packet size is genuinely worth measuring rather than assuming.
 *Strength:* the kernel source is unchanged and stays bit-exact against its scalar self.
 *Weakness:* you own a tuning parameter you did not have before.
 
-## 2. IIR biquad filter bank — complementary, not competing
+## 2. IIR biquad filter bank — measured against DSP.jl
 
 **Without Interleave** you would use [DSP.jl](https://docs.juliadsp.org/stable/filters/) and
-`filt`. That is a real, well-optimized answer — for **one** signal. A bank of hundreds of
-independent filters is a loop around it, and each call carries the same strict temporal
-recurrence that no compiler vectorizes.
+`filt`. `filt(b, a, X)` on a matrix filters each column independently, so a filter bank is one
+call — it is the direct competitor, not an approximation of one.
 
-DSP.jl also gives you everything Interleave does not: filter *design* (Butterworth,
-Chebyshev), form conversion, stability analysis. Interleave has none of that and should not
-try.
+An earlier revision of this page asserted that DSP.jl was "a real, well-optimized answer"
+without measuring it. It is worth separating the two claims, because only one survives.
 
-**Verdict.** 15.0×, the largest single-threaded gain of the suite. The honest recommendation
-is to use both: **design the filter with DSP.jl, run the bank with Interleave.**
+`bench/dspcompare.jl`, 1024 independent channels × 4096 samples, `Float32`, same coefficients,
+each library in its own natural layout (DSP filters columns of `(ns, nb)`, Interleave works
+batch-major `(nb, ns)`), numerical agreement checked before timing:
+
+| variant | time | vs naive loop | vs `DSP.filt!` |
+|---|---:|---:|---:|
+| naive Julia loop | 27.321 ms | 1.00× | 0.82× |
+| `DSP.filt` | 22.545 ms | 1.21× | 0.99× |
+| `DSP.filt!` (in place) | 22.334 ms | 1.22× | 1.00× |
+| Interleave `P=1` | 13.001 ms | 2.10× | 1.72× |
+| Interleave `P=8` | 1.622 ms | 16.84× | 13.77× |
+| **Interleave `P=16`** | **0.820 ms** | **33.31×** | **27.23×** |
+| Interleave `P=32` | 1.070 ms | 25.54× | 20.88× |
+
+**On throughput, DSP.jl loses by a factor of 27.** That is not a criticism of DSP.jl: `filt`
+runs the same strict temporal recurrence per channel that no compiler vectorizes, so it beats
+a naive loop by only 1.22×. The recurrence is the wall, and DSP.jl does not try to go around
+it by batching across channels.
+
+Two details in that table are worth more than the headline:
+
+- **`P=1` already wins 2.10×** with no SIMD at all. An interleaved instance is contiguous,
+  while `X[c, n]` in the naive column-major loop strides across channels. Part of the gain is
+  pure locality, not vectorization.
+- **`P=32` is *worse* than `P=16` here**, where the opposite is true for Thomas. The optimum
+  is genuinely per-kernel, which is why [`tune`](@ref) exists.
+
+Interleave computes bit-exactly the same result as the naive loop (max difference exactly
+`0.0`); DSP.jl differs by `2.4e-7`, having its own accumulation order.
+
+**Verdict.** DSP.jl wins decisively on **features** — filter design (Butterworth, Chebyshev),
+form conversion, stability analysis — none of which Interleave has or should have. It loses on
+**throughput for a bank** by 27×. The honest recommendation is unchanged in shape but sharper
+in reason: **design the filter with DSP.jl, run the bank with Interleave.**
 
 ## 3. Black–Scholes Crank–Nicolson — the best case, at a price
 
@@ -113,6 +145,47 @@ Same story: a 43.4 GFlop/s reference, `P=8` gives 0.88×, and `P=1` restores par
 
 These two negative cases are the reason the package documents a decision rule rather than a
 speedup claim.
+
+### The same algorithm wins in C++ — and that is not a contradiction
+
+Legolas++, the C++ project these ideas come from, measured *the same* Sobel-plus-temporal
+pipeline and found DLI **winning**:
+
+| Sobel + temporal, 32×720p (C++, AVX2, Ryzen 5 3600, GCC 15.2 `-O3 -march=native`) | time | vs scalar |
+|---|---:|---:|
+| CPU scalar, 1 core | 56.17 ms | 1.00× |
+| **CPU DLI AVX2, 1 core** | 19.95 ms | **2.82×** |
+
+2.82× there, 0.88× here, on the same algorithm. The explanation is not that DLI behaves
+differently — it is that **the two verdicts are measured against different baselines**:
+
+| | baseline throughput | DLI verdict |
+|---|---:|---:|
+| C++ video pipeline | 12.1 GFlop/s | **2.82×** |
+| C++ depthwise | 49.2 GFlop/s | 1.09× |
+| Julia Sobel + motion | 43.4 GFlop/s | 0.88× |
+| Julia depthwise | 40.6 GFlop/s | 0.43× (`P=1`: 1.05×) |
+
+Read the first column and the second follows. GCC did **not** vectorize the C++ video kernel —
+12 GFlop/s is a scalar baseline — so DLI recovered what the compiler had left on the table.
+GCC *did* vectorize the C++ depthwise kernel, and DLI gained nothing there either (1.09×).
+LLVM vectorized **both** Julia kernels, so DLI has nothing left to recover in either.
+
+So the decision rule does not merely survive the cross-language comparison; it **predicts**
+it. What changes between the two projects is not the technique but which kernels the compiler
+happened to handle.
+
+The practical consequence is a warning: **a DLI verdict is not portable.** It is a property of
+your kernel, your compiler and your machine together, and a 2.82× measured in C++ with GCC on
+AVX2 tells you nothing about the same algorithm in Julia with LLVM on NEON. Measure the
+reference throughput on the machine you will actually run on.
+
+!!! note "This is a comparison of published numbers, not a controlled experiment"
+    The two campaigns differ in machine (Ryzen 5 3600 / AVX2 versus Apple M-series / NEON),
+    in problem size (32×720p ≈ 29.5 Mpixels and 118 MB per buffer, against 256×128² ≈ 4.2
+    Mpixels and about 16 MB here), and therefore in memory regime. The baseline throughputs
+    are directly comparable; the speedups should be read as evidence for the mechanism, not
+    as a head-to-head between the two implementations.
 
 ## 6. Per-instance reductions
 
