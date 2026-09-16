@@ -31,7 +31,7 @@ using BenchmarkTools
 
 include(joinpath(@__DIR__, "..", "..", "test", "kernels.jl"))
 
-backend_functional() || error("KernelAbstractions backend '$KA_BACKEND' did not find a supported GPU")
+const BACKEND_AVAILABLE = backend_functional()
 
 const T = Float32
 
@@ -90,6 +90,10 @@ function _case(name, f, host; scratch = nothing, rtol = 5f-5)
 end
 
 function main()
+    if !BACKEND_AVAILABLE
+        println("$(KA_BACKEND) KernelAbstractions suite skipped (no functional GPU on this runner)")
+        return nothing
+    end
     nb, nx = 4_096, 64
     X = fill(T(1), nb, nx); D = fill(T(2), nb, nx)
     U = fill(T(-1), nb, nx); L = fill(T(-1), nb, nx)

@@ -8,7 +8,10 @@ using BenchmarkTools
 include(joinpath(@__DIR__, "..", "..", "test", "kernels.jl"))
 
 function main(; nbatch = 65_536, nx = 64, workgroupsize = 256)
-    Metal.functional() || error("Metal.jl did not find a supported Apple GPU")
+    if !Metal.functional()
+        println("Metal Thomas: skipped (no functional Metal GPU on this runner)")
+        return nothing
+    end
 
     host(v) = fill(Float32(v), nbatch, nx)
     X, D, U, L, B = host(0), host(2), host(-1), host(-1), host(1)
