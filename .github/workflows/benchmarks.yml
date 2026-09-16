@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      run_gpu:
+        description: 'Run the paid/optional GPU jobs'
+        type: boolean
+        default: false
   release:
     types: [published]
   schedule:
@@ -80,14 +85,14 @@ jobs:
             macos-metal.txt
             macos-metal-all.txt
 
-  # GitHub's standard hosted runners do not expose a GPU.  These two jobs are
-  # therefore opt-in: set the repository variable to the *runner name or label*
-  # configured by the organization.  An unset variable makes the job skipped,
-  # rather than pretending that a CPU runner measured GPU throughput.
+  # Standard GitHub-hosted runners do not expose a GPU. GitHub's managed GPU
+  # larger runner is a 4-vCPU Tesla T4 and is selected by the documented
+  # `linux_4_core_gpu` label. It is enabled only for releases or an explicit
+  # workflow_dispatch input because larger runners are metered.
   ka-nvidia:
     name: KernelAbstractions benchmark / NVIDIA CUDA
-    if: ${{ vars.INTERLEAVE_NVIDIA_RUNNER != '' }}
-    runs-on: ${{ vars.INTERLEAVE_NVIDIA_RUNNER }}
+    if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_gpu) }}
+    runs-on: ${{ vars.INTERLEAVE_NVIDIA_RUNNER || 'linux_4_core_gpu' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +117,9 @@ jobs:
 
   ka-amd:
     name: KernelAbstractions benchmark / AMDGPU ROCm
-    if: ${{ vars.INTERLEAVE_AMD_RUNNER != '' }}
+    # GitHub does not publish an AMD/ROCm hosted label. Set this variable to
+    # the AMD or institutional runner label (for example, a ROCm fleet label).
+    if: ${{ vars.INTERLEAVE_AMD_RUNNER != '' && (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_gpu)) }}
     runs-on: ${{ vars.INTERLEAVE_AMD_RUNNER }}
     timeout-minutes: 45
     steps:

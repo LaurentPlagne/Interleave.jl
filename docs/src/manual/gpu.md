@@ -80,17 +80,16 @@ The repository workflow mirrors the multi-target structure used by Legolas++:
 - an optional AMDGPU/ROCm job runs on an organization-configured self-hosted runner.
 
 The CPU, Metal, CUDA, and AMDGPU jobs upload their raw output and append it to the GitHub job
-summary. The CUDA and AMDGPU jobs are skipped until the repository variables
-`INTERLEAVE_NVIDIA_RUNNER` and `INTERLEAVE_AMD_RUNNER` are set to real runner names/labels.
-This is deliberate: standard GitHub-hosted runners do not provide a GPU, and GitHub does not
-provide a universal AMD label.
+summary. The CUDA job uses GitHub's managed GPU runner on releases or explicit GPU dispatches;
+the AMDGPU job is skipped unless `INTERLEAVE_AMD_RUNNER` names a real ROCm runner. Standard
+GitHub-hosted runners remain CPU-only, and GitHub does not provide a universal AMD label.
 
-To enable the jobs, open the repository's **Settings → Secrets and variables → Actions →
-Variables** and set `INTERLEAVE_NVIDIA_RUNNER` to the name/label of an organization-configured
-GitHub GPU larger runner (normally an NVIDIA T4), and/or set `INTERLEAVE_AMD_RUNNER` to the
-name/label of a self-hosted Linux runner with ROCm and AMDGPU.jl installed. The workflow does
-not guess labels: a wrong label must fail visibly instead of silently running on a CPU. GitHub's
-runner name and label syntax is documented in its [runner selection guide](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
+The CUDA job uses GitHub's managed `linux_4_core_gpu` larger runner (Tesla T4) on releases or
+when a manual dispatch enables `run_gpu`. Set `INTERLEAVE_NVIDIA_RUNNER` only if the
+organization has assigned a different GPU runner label. For AMDGPU, set `INTERLEAVE_AMD_RUNNER`
+to the exact label of an AMD-provided or institutional ROCm runner; GitHub does not publish an
+AMD/ROCm hosted label. GitHub's runner name and label syntax is documented in its
+[runner selection guide](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
 
 ## Correctness contract
 
