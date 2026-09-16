@@ -45,6 +45,14 @@ des limites de C++.
      `A[17]` est capté comme un numéro d'instance et rend silencieusement le mauvais
      élément. Bug réellement rencontré, désormais testé.
 
+0 quater. **`packet` et `instance` ne désignent pas la même chose.** `packet(A, k)` est la
+   vue du **paquet** `k` (`k ∈ 1:npacks`), c'est elle que reçoit un noyau. `instance(A, b)`
+   est le **problème** `b` (`b ∈ 1:nbatch`), vue scalaire lane par lane, réservée au
+   débogage, à la comparaison et aux I/O. Sur un `Base.Array` les deux coïncident, `P` valant
+   1 — c'est précisément ce qui rend les deux chemins interchangeables. Ne jamais réintroduire
+   un nom unique pour les deux : la confusion a existé et coûtait un facteur `P` sur les
+   bornes de boucle.
+
 Ce sont les propriétés à contrôler **à la construction ou dans les tests**
 (`julia-recommandations.md` §6), parce qu'une régression silencieuse y est indétectable
 à l'œil.
@@ -205,7 +213,9 @@ Voir §3 du guide. Ce qui s'applique particulièrement :
   `P=16` vaut quatre fois la largeur matérielle et reste le meilleur : une récurrence est
   *latency-bound*, et plusieurs vecteurs en vol cachent la latence de la chaîne de
   dépendance. **Donc `P` se règle par mesure, par noyau** — ne jamais le coder en dur
-  « à la largeur du CPU ». `P=1` reproduit la référence naïve exactement — à `P = 1` le
+  « à la largeur du CPU ». `tune` (dans le paquet, `src/tune.jl`) fait cette mesure ; il
+  reproduit ce tableau à 1 % près et trouve **`P=32` à 18.3×**, au-delà de la colonne
+  ci-dessus. Le tableau n'allait pas assez loin. `P=1` reproduit la référence naïve exactement — à `P = 1` le
   conteneur *est* un tableau dense ordinaire (§2 ter).
 - **Le threading rapporte peu une fois `P` bien choisi** : `P=16` passe de 13.4× à 16.2×
   sur 8 threads. À ce régime le noyau est limité par la bande passante mémoire (5 tableaux
@@ -230,7 +240,8 @@ arguments sont boxés. **Mesuré sur le driver** : avec `arrays::Tuple` et `view
 
 Corollaire, mesuré aussi : une **closure** capturant une variable englobante est boxée
 (144 octets par appel du driver). Lui préférer un **type nommé appelable** — c'est
-pourquoi `scratchlike` rend un `ScratchProto` et non une closure.
+pourquoi `scratchlike` rend un **tableau prototype** que le driver copie par
+chunk, et non une closure.
 
 ## 4. Tests
 
