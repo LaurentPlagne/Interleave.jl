@@ -65,7 +65,7 @@ function tridiagonal_batch(Arr, nbatch, n)
 end
 
 xs, ds, us, ls, bs = tridiagonal_batch(Base.Array{Float32,2}, 61, 32)
-apply!(thomas!, xs, ds, us, ls, bs; scratch=similar(instance(xs, 1)))
+apply!(thomas!, xs, ds, us, ls, bs; scratch=scratchlike(xs))
 xs[1, 1:4]
 ```
 
@@ -83,7 +83,7 @@ last packet therefore exercises padding.
 
 ```@example thomas
 xv, dv, uv, lv, bv = tridiagonal_batch(Interleave.Array{Float32,2,8}, 61, 32)
-apply!(thomas!, xv, dv, uv, lv, bv; scratch=similar(instance(xv, 1)))
+apply!(thomas!, xv, dv, uv, lv, bv; scratch=scratchlike(xv))
 
 (xs == xv, packsize(xv), npacks(xv), npadding(xv))
 ```
@@ -97,10 +97,10 @@ operations, in the same order, as its scalar instance.
 
 ## 4. See why it vectorizes
 
-`instance(xv, 1)` is a dense vector whose element type is `Vec{8,Float32}`:
+`packet(xv, 1)` is a dense vector whose element type is `Vec{8,Float32}`:
 
 ```@example thomas
-packed = instance(xv, 1)
+packed = packet(xv, 1)
 (size(packed), strides(packed), eltype(packed))
 ```
 

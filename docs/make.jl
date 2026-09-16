@@ -51,6 +51,7 @@ makedocs(;
             "Task parallelism" => "manual/parallel.md",
             "GPU execution" => "manual/gpu.md",
             "Positioning and alternatives" => "manual/alternatives.md",
+            "What you would write instead" => "manual/what-it-replaces.md",
             "Design review and roadmap" => "manual/review.md",
         ],
         "API reference" => "reference.md",

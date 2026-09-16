@@ -72,7 +72,7 @@ Never allocate work arrays inside a kernel invoked once per packet. Pass a proto
 the driver:
 
 ```julia
-scratch = similar(instance(output, 1))
+scratch = scratchlike(output)
 apply!(kernel!, output, input; scratch)
 ```
 
@@ -85,7 +85,7 @@ also accepted when construction needs more control.
 Useful regression checks are:
 
 ```julia
-@inferred instance(A, 1)
+@inferred packet(A, 1)
 @inferred apply!(kernel!, output, input)
 @allocated apply!(kernel!, output, input) == 0
 ```

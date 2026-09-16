@@ -49,7 +49,7 @@ reference, but it no longer has the same constructor and indexing contract.
 
 ## Multidimensional instances
 
-An instance can be a matrix or a volume. `instance(A, k)` removes only the packet dimension:
+An instance can be a matrix or a volume. `packet(A, k)` removes only the packet dimension:
 
 ```@example dimensions
 using Interleave

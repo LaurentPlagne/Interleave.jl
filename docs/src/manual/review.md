@@ -57,9 +57,11 @@ between a CPU prototype and a GPU allocation. A reusable execution plan could ow
 workspace, backend, workgroup size, and (for CPU) packet size, avoiding repeated setup while
 keeping `apply!` allocation-free in its hot loop.
 
-The public meaning of `instance(A, k)` also deserves clarification: for an interleaved
-array `k` is a packed packet, not necessarily one logical problem. A distinct internal name
-would avoid exposing this implementation detail as the public notion of an instance.
+*Resolved.* `instance(A, k)` used to mean a packet, so `k` ranged over `1:npacks` on an
+interleaved array but over `1:nbatch` on a `Base.Array` — the same call denoting `P` problems
+or one, with no visible difference in the returned shape. The hot path is now
+[`packet`](@ref), and `instance(A, b)` always denotes exactly problem `b`, reading one lane
+out of each packet. It is a debugging, comparison and I/O tool, not a hot path.
 
 Finally, parameters such as filter coefficients should be ordinary concrete arguments or a
 small callable object. Backend-specific `gpu_*` wrappers are useful as smoke-test fixtures,

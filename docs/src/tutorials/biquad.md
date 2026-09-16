@@ -82,7 +82,7 @@ For example, a normalized constant that works for scalar and packed elements is:
 
 ```@example biquad
 one_eighth(y) = lanetype(eltype(y))(0.125)
-(one_eighth(instance(ys, 1)), one_eighth(instance(yv, 1)))
+(one_eighth(packet(ys, 1)), one_eighth(packet(yv, 1)))
 ```
 
 ## 5. What the speedup means

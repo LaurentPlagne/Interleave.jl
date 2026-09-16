@@ -30,7 +30,7 @@ When a prototype array is supplied, the driver calls `similar` once per chunk:
 
 ```julia
 parallel_apply!(kernel!, output, input;
-                scratch=similar(instance(output, 1)),
+                scratch=scratchlike(output),
                 scheduler=StaticScheduler())
 ```
 
