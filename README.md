@@ -1,5 +1,7 @@
 # Interleave.jl
 
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://laurentplagne.github.io/Interleave.jl/dev/)
+[![CI](https://github.com/LaurentPlagne/Interleave.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/LaurentPlagne/Interleave.jl/actions/workflows/ci.yml)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)
 
 **Keep the recurrence. Vectorize the population.**
@@ -26,13 +28,13 @@ choose `P=1`.
 - Results are tested for exact scalar-to-packed agreement.
 - Packet size is a tuning parameter to measure, not a performance guarantee.
 
-Start with the visual [documentation and tutorials](docs/src/index.md), especially the
-[tridiagonal recurrence tutorial](docs/src/tutorials/thomas.md). The
-[benchmark application studies](docs/src/applications/index.md) cover all shipped
+Start with the visual [documentation and tutorials](https://laurentplagne.github.io/Interleave.jl/dev/), especially the
+[tridiagonal recurrence tutorial](https://laurentplagne.github.io/Interleave.jl/dev/tutorials/thomas/). The
+[benchmark application studies](https://laurentplagne.github.io/Interleave.jl/dev/applications/) cover all shipped
 kernels with animations, complete performance tables, and comparisons with alternative
 compiler, library, threaded, and GPU approaches.
 
-The experimental [GPU design and tutorial](docs/src/manual/gpu.md) explains the
+The experimental [GPU design and tutorial](https://laurentplagne.github.io/Interleave.jl/dev/manual/gpu/) explains the
 KernelAbstractions driver, batch-major device layout, and the shared all-kernel suite.
 
 ## Reproducible target benchmarks
@@ -46,8 +48,12 @@ organization on a Team or Enterprise plan, which this repository is not, so the 
 and `ka-amd` jobs stay dormant unless `INTERLEAVE_NVIDIA_RUNNER` / `INTERLEAVE_AMD_RUNNER`
 name a self-hosted runner. To produce NVIDIA numbers on any machine — a workstation, a rented
 box, or a Colab runtime — use `./gpu/run_remote.sh cuda`; only the vendor driver is required,
-since CUDA.jl ships its own toolkit. See the [GPU manual](docs/src/manual/gpu.md) for the
+since CUDA.jl ships its own toolkit. See the [GPU manual](https://laurentplagne.github.io/Interleave.jl/dev/manual/gpu/) for the
 three available paths. The Vulkan/SPIR-V prototype is deliberately outside this workflow.
+
+[When *not* to use Interleave](https://laurentplagne.github.io/Interleave.jl/dev/manual/what-it-replaces/) compares every shipped kernel
+against what you would write in plain Julia or with another package — including the two cases
+where Interleave is slower than doing nothing.
 
 Interleave.jl is experimental. It is not registered yet; install the repository directly:
 
