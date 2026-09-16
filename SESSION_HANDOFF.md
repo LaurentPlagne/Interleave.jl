@@ -100,8 +100,8 @@ Test suite after these changes: **315 passed, 0 failed** (was 301).
    secret — a `gh-pages` push made with `GITHUB_TOKEN` does not trigger the Pages job.
 2. **Codecov**: add the `CODECOV_TOKEN` secret. The upload is configured with
    `fail_ci_if_error: false`, so CI stays green until it exists.
-3. **NVIDIA numbers**: run `./gpu/run_remote.sh cuda` on a rented or borrowed GPU machine and
-   paste the device block and table into `docs/src/manual/gpu.md`.
+3. ~~NVIDIA numbers~~ **Done**, on a Colab T4. The table is in `docs/src/manual/gpu.md`. The
+   `nvidia-smi` device block is still missing from that page and should be pasted in.
 4. `gh` is not installed locally, so no session can check workflow run status until
    `brew install gh && gh auth login`.
 

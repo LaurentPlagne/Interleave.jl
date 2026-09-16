@@ -118,6 +118,71 @@ Three paths actually work, in increasing order of commitment:
 The same three options apply to AMDGPU through `INTERLEAVE_AMD_RUNNER`; GitHub publishes no
 AMD/ROCm hosted label at all.
 
+## Measured results
+
+The same ten scalar kernels, the same driver, the same commit, on two backends. Kernel time
+only — no host transfers — and every case is validated against the scalar CPU oracle before it
+is timed.
+
+| kernel | recurrence? | Metal, M1 Max | CUDA, T4 |
+|---|:---:|---:|---:|
+| Thomas | yes | 0.586 ms | **0.245 ms** |
+| Biquad | yes | 0.555 ms | **0.164 ms** |
+| Black–Scholes CN | yes | 1.800 ms | **0.734 ms** |
+| Thomas lines | yes | 0.632 ms | **0.202 ms** |
+| Tridiagonal product | yes | 0.333 ms | **0.056 ms** |
+| Squared norm | reduction | 0.446 ms | **0.131 ms** |
+| Dot product | reduction | 0.514 ms | **0.162 ms** |
+| Depthwise 3×3 | **no** | **2.854 ms** | 5.487 ms |
+| Sobel + motion | **no** | **3.169 ms** | 3.816 ms |
+| Laplacian 3D | **no** | **4.435 ms** | 5.850 ms |
+
+The split is clean and follows the same line as everywhere else in this documentation. On the
+recurrence kernels and the reductions the T4 wins by 2.4× to 5.9×. On the three **stencils** it
+*loses*, by 1.2× to 1.9×.
+
+That is not a statement about the hardware. It is the known limitation of this driver: one work
+item owns one complete instance, so a stencil kernel becomes a single thread looping over a
+whole image. That proves source reuse, which is the point of the exercise, but it is not a
+performance-optimal stencil schedule — a real one decomposes over pixels or tiles. The T4's
+weaker per-thread execution exposes that more than the M1 Max's does.
+
+!!! warning "Not a hardware comparison"
+    Different machines, different memory systems, and the T4 was a shared Colab instance.
+    Kernel-only timings exclude transfers, which dominate for a discrete GPU unless the data is
+    already resident. Read the table as evidence that one source runs on both and that the
+    *shape* of the result follows the kernel type — not as a benchmark of Apple against NVIDIA.
+
+### Bit-exactness stops at the backend
+
+This is the finding worth carrying away, and it qualifies the package's central invariant.
+
+| | Metal | CUDA |
+|---|---|---|
+| kernels bit-exact against the CPU oracle | **10 / 10** | **1 / 10** |
+
+Metal reproduces the scalar CPU result *exactly* — `max error 0.0` on every kernel. CUDA does
+not: errors from `1.2e-7` on the biquad to `7.3e-4` on Black–Scholes, which is a doubly nested
+recurrence and accumulates the difference over eight time steps.
+
+The cause is almost certainly **FMA contraction**: NVIDIA's compiler fuses `a*b + c` into a
+single `fma` by default, which rounds once instead of twice. That is precisely the
+transformation [invariant 1](https://github.com/LaurentPlagne/Interleave.jl/blob/main/AGENTS.md)
+forbids on the CPU path, where `@fastmath` is banned for exactly this reason — and on the GPU
+it is the vendor compiler's default, outside this package's control.
+
+The practical consequence:
+
+- the **CPU** guarantee is unchanged. `Vec{P,T}` results are bit-identical (`==`, not `≈`) to
+  the scalar kernel, and the test suite asserts it;
+- the **GPU** path guarantees *the same algorithm*, not the same rounding, and how close the
+  results are is a property of the backend. The validation suite therefore compares with a
+  tolerance rather than equality, and that tolerance is not a weakness in the test — it is the
+  honest statement of what a vendor compiler leaves you.
+
+If you need bit-exact agreement with the CPU reference, Metal currently provides it and CUDA
+does not. Do not assume it; the suite prints the measured error for every kernel.
+
 ## Correctness contract
 
 The GPU tests must preserve the properties that matter:
