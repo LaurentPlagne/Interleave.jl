@@ -84,11 +84,11 @@ summary. The CUDA job uses GitHub's managed GPU runner on releases or explicit G
 the AMDGPU job is skipped unless `INTERLEAVE_AMD_RUNNER` names a real ROCm runner. Standard
 GitHub-hosted runners remain CPU-only, and GitHub does not provide a universal AMD label.
 
-The CUDA job uses GitHub's managed `linux_4_core_gpu` larger runner (Tesla T4) on releases or
-when a manual dispatch enables `run_gpu`. Set `INTERLEAVE_NVIDIA_RUNNER` only if the
-organization has assigned a different GPU runner label. For AMDGPU, set `INTERLEAVE_AMD_RUNNER`
-to the exact label of an AMD-provided or institutional ROCm runner; GitHub does not publish an
-AMD/ROCm hosted label. GitHub's runner name and label syntax is documented in its
+The CUDA job uses GitHub's managed larger runner (Tesla T4) on releases or when a manual
+dispatch enables `run_gpu`. Set `INTERLEAVE_NVIDIA_RUNNER` to the runner name created in the
+repository/organization settings, or pass that name as the dispatch input. For AMDGPU, set
+`INTERLEAVE_AMD_RUNNER` to the exact label of an AMD-provided or institutional ROCm runner;
+GitHub does not publish an AMD/ROCm hosted label. GitHub's runner name and label syntax is documented in its
 [runner selection guide](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
 
 ## Correctness contract

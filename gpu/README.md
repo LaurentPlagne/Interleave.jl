@@ -21,7 +21,7 @@ is a weak-dependency extension activated by KernelAbstractions. The old [`vulkan
 directory is retained as an explicitly unsupported ABI experiment, but is no longer built or
 benchmarked by CI.
 
-The CUDA job targets GitHub's managed `linux_4_core_gpu` Tesla-T4 larger runner on releases or
-an explicit GPU workflow dispatch. Set `INTERLEAVE_NVIDIA_RUNNER` only to override that label.
-There is no standard GitHub-hosted AMD/ROCm label; set `INTERLEAVE_AMD_RUNNER` to the exact
-label of an AMD-provided or institutional ROCm runner to enable that job.
+The CUDA job targets the name/label assigned when a GitHub-managed Tesla-T4 larger runner is
+created, on releases or an explicit GPU workflow dispatch. Set `INTERLEAVE_NVIDIA_RUNNER` (or
+the dispatch input) to that name. There is no standard GitHub-hosted AMD/ROCm label; set
+`INTERLEAVE_AMD_RUNNER` to the exact label of an AMD-provided or institutional ROCm runner.
