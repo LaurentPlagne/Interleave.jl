@@ -1,6 +1,7 @@
 using Test
 using Interleave
 using KernelAbstractions
+using Serialization: serialize, deserialize
 using InteractiveUtils: code_llvm
 
 include("kernels.jl")
@@ -413,6 +414,50 @@ end
         @test Interleave.instance(B, 1)[1][1] == T(7)
         @test A[1, 1] == T(1)
         @test pointer(B.flat) != pointer(A.flat)
+    end
+
+    @testset "serialization preserves the packed/scalar alias" begin
+        # Même danger que `deepcopy` : `Serialization` reconstruit la struct champ par
+        # champ, donc `data` et `flat` reviendraient dés-aliasés. Une écriture scalaire
+        # atterrirait alors dans un tampon qu'aucun noyau ne lit — faux, et silencieux.
+        # `nbatch` non multiple de `P` : le padding doit survivre au voyage lui aussi.
+        A = Interleave.Array{T,2,4}([T(10b + i) for b in 1:6, i in 1:3])
+        io = IOBuffer()
+        serialize(io, A)
+        seekstart(io)
+        B = deserialize(io)
+
+        @test typeof(B) === typeof(A)
+        @test size(B) == size(A)
+        @test B == A
+        @test Interleave.npadding(B) == Interleave.npadding(A)
+
+        # Le test décisif : une écriture scalaire doit être visible par le noyau, qui lit
+        # `parent(B)` — et non par la seule vue scalaire.
+        B[2, 2] = T(99)
+        @test B[2, 2] == T(99)
+        @test parent(B)[2, 1][2] == T(99)
+        @test pointer(B.flat) == reinterpret(Ptr{T}, pointer(parent(B)))
+
+        # L'original n'a pas bougé.
+        @test A[2, 2] == T(22)
+
+        # Invariant 3 : les lanes de padding restent initialisées après l'aller-retour.
+        nvalid = Interleave.packsize(B) - Interleave.npadding(B)
+        @test all(iszero, view(B.flat, nvalid+1:Interleave.packsize(B), :,
+                               Interleave.npacks(B)))
+
+        # Et le noyau tourne sur le lot désérialisé, bit à bit comme sur l'original.
+        X, D, U, L, Bv = thomas_setup(6, 8; pack = Val(4))
+        io2 = IOBuffer()
+        serialize(io2, D)
+        seekstart(io2)
+        Dr = deserialize(io2)
+        Xr = similar(X)
+        fill!(Xr, 0)
+        apply!(thomas!, X, D, U, L, Bv; scratch = similar(instance(X, 1)))
+        apply!(thomas!, Xr, Dr, U, L, Bv; scratch = similar(instance(Xr, 1)))
+        @test Xr == X
     end
 
     @testset "instances 3-D et au-delà" begin
