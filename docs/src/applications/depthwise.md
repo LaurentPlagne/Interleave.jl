@@ -50,10 +50,12 @@ DLI; compared with threaded `P=1`, the packed layout is still slightly slower.
 
 - Plain Julia and LLVM are already the relevant competitor. `@simd` may help only when its
   independence promise is valid and aliasing is understood; it should never be added by habit.
-- [`LoopVectorization.@turbo`](https://juliasimd.github.io/LoopVectorization.jl/stable/api/)
-  models and reorders independent loop nests. [`Tullio.jl`](https://github.com/mcabbott/Tullio.jl)
-  can express convolutions and stencils in index notation and can combine loop transformation,
-  tiling, and threading. Both attack the spatial loop—the right axis for this workload.
+- [`Tullio.jl`](https://github.com/mcabbott/Tullio.jl) expresses convolutions and stencils in
+  index notation and combines loop transformation, tiling, and threading. It attacks the
+  spatial loop — the right axis for this workload — and it is maintained.
+  [`LoopVectorization.@turbo`](https://github.com/JuliaSIMD/LoopVectorization.jl) did the same and was the earlier recommendation here; it
+  is now maintenance-only and falls back to `@inbounds @fastmath` on Julia ≥ 1.11, so it is no
+  longer suggested alongside a package whose central invariant forbids `@fastmath`.
 - [`NNlib.depthwiseconv`](https://fluxml.ai/Flux.jl/stable/reference/models/nnlib/#NNlib.depthwiseconv)
   is the production-oriented choice in a neural-network pipeline. NNlib also has CUDA and
   AMDGPU extensions and ChainRules support.

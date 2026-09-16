@@ -49,7 +49,7 @@ the 4.32× comparison with a serial reference suggests. The defensible default r
 
 - Plain Julia/LLVM is already effective for the spatial loop. Keeping a fused loop and a
   normal array is the lowest-complexity baseline.
-- LoopVectorization can target the independent pixel loop, while Tullio is well suited to
+- Tullio is well suited to
   expressing the Sobel stencil in index notation. Their legality assumptions must still be
   checked when output aliases an input.
 - Image-processing or neural-network libraries are preferable when their primitive matches

@@ -42,10 +42,22 @@ That is the natural first alternative, and it exposes the essential trade-off:
 
 DLI is often called an AoSoA layout: it applies SoA only inside a cache-sized group of
 problems. The group advances through the complete recurrence before the next group starts.
-This preserves the natural one-problem kernel, gives unit-stride packet loads, and bounds
-the distance between consecutive recurrence states. The
-[Thomas benchmark](applications/thomas.md) measures the global-SoA rewrite rather than
-assuming this argument always wins.
+This preserves the natural one-problem kernel, gives unit-stride packet loads, and bounds the
+distance between consecutive recurrence states.
+
+**And the global-SoA rewrite is measured, not assumed.** An experienced reader does not
+compare this to a naive loop; they say "I would just write it SoA by hand". Sometimes they are
+right — on a first-order recurrence, hand-written SoA beats Interleave by 2.5×. As soon as the
+recurrence carries more than one predecessor the ordering reverses and the gap widens, because
+the SoA form needs one strided stream per array and the memory system falls off a cliff once
+there are more than about a dozen. The sweeps are in
+[What you would write instead](manual/what-it-replaces.md).
+
+There is also an argument the stopwatch does not capture. **You want to get the algorithm
+right in scalar form first**, and a transposed loop nest is neither a natural thing to write
+nor a natural thing to debug. Interleave keeps that scalar kernel as the *only* kernel: the
+one you developed is the one that ships, and there is no transposed twin to keep in step.
+Where hand-written SoA wins on the clock, it still costs you that.
 
 ## Is this tool for your kernel?
 
@@ -66,9 +78,22 @@ assuming this argument always wins.
 </div>
 ```
 
-The throughput of the ordinary reference is a useful first diagnostic. In the measurements
-below, slow scalar references reveal a recurrence bottleneck; already-fast references have
-little SIMD work left for Interleave to recover.
+Those two boxes are a starting point, not a verdict, and a kernel can **move between them**.
+Adding a recursive row filter to the Sobel pipeline — the canonical bad fit, measured at
+0.69× — turns it into a 3.6× win without touching the stencil.
+
+Two questions place a kernel, and the second is a gradient rather than a gate:
+
+1. **What throughput does your ordinary reference reach?** A slow scalar reference reveals a
+   recurrence bottleneck; an already-fast one has little SIMD work left to recover.
+2. **How many predecessors does the recurrence carry?** One, and a hand-written SoA layout
+   beats Interleave. Beyond that the gap opens and keeps opening: 2.2× on a tridiagonal solve,
+   8.4× on a sixteenth-order IIR, 11.8× on a pentadiagonal one.
+
+The honest way to state the second, because it is what the sweeps actually show: **Interleave
+does not get faster as the recurrence hardens — the alternatives get slower.** Across the
+video sweep its time rises 1.8× while the reference's rises 9.1×. All of it is measured in
+[What you would write instead](manual/what-it-replaces.md).
 
 ![Reference throughput versus measured DLI speedup](assets/fit-map.svg)
 
@@ -166,8 +191,14 @@ Interleave combines four ideas into one programming model:
 
 1. **SIMD follows semantic independence, not necessarily the innermost loop.** The packed
    axis is a population of problems rather than consecutive steps of one problem.
-2. **The element type is the optimization switch.** The same source kernel runs on a scalar
-   element or a SIMD packet; there is no second “vector implementation” to maintain.
+2. **The element type is the optimization switch, and that is a correctness property.** The
+   same source kernel runs on a scalar element or a SIMD packet, so there is no second
+   "vector implementation" to maintain — and no second implementation means nothing that can
+   drift. The alternative is not hypothetical: writing the hand-rolled SoA variants used in
+   the comparisons introduced a real bit-exactness bug, one `Float32` ulp from an
+   associativity slip in a boot loop that exists only because the layout changed. It looked
+   like a property of SoA until it was tracked down. **A second layout is a second source of
+   truth, and second sources drift.**
 3. **The logical and physical arrays disagree on purpose.** Users read a scalar batch while
    kernels receive dense arrays of packets.
 4. **Threading remains explicit.** [`apply!`](@ref) is always sequential;
@@ -178,17 +209,8 @@ dispatch, `AbstractArray`, views, and a concrete SIMD element type are enough.
 
 ## Choose a path
 
-```@raw html
-<div class="interleave-path">
-  <div class="interleave-step"><strong>1 · Solve</strong>Vectorize a tridiagonal recurrence</div>
-  <div class="interleave-step"><strong>2 · Stream</strong>Run independent feedback filters</div>
-  <div class="interleave-step"><strong>3 · Reorient</strong>Pack the right axis in a 3-D solver</div>
-  <div class="interleave-step"><strong>4 · Measure</strong>Decide whether DLI pays and tune P</div>
-</div>
-```
-
-If this is your first visit, start with [the Thomas tutorial](tutorials/thomas.md). Continue
-with the [filter bank](tutorials/biquad.md), [3-D ADI](tutorials/adi.md), and
+If this is your first visit, start with [the Thomas tutorial](tutorials/thomas.md), then the
+[filter bank](tutorials/biquad.md), [3-D ADI](tutorials/adi.md), and
 [performance decision](tutorials/choosing-p.md) tutorials. Together they move from the core
 mechanism to realistic layout and tuning decisions.
 
@@ -206,5 +228,5 @@ of the design argument: Interleave provides `P=1` so the same kernel can decline
 ordinary spatial SIMD is better.
 
 See [Positioning and alternatives](manual/alternatives.md) for the wider comparison with
-compiler vectorization, LoopVectorization, Tullio, explicit SIMD, task schedulers, domain
+compiler vectorization, Tullio, explicit SIMD, task schedulers, domain
 libraries, and GPU implementations.

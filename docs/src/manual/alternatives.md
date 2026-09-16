@@ -10,7 +10,8 @@ recurrence on a CPU.
 |---|---|---|---|---|
 | Julia/LLVM auto-vectorization | regular contiguous loops | usually blocked | none | always try first |
 | `@simd` | loops known to have independent iterations | illegal for a true recurrence | one annotation and a correctness promise | alternative only on another legal axis |
-| LoopVectorization | independent loop nests, reductions, stencils | assumes iteration independence | macro around the loop | preferable for depthwise/Sobel-like kernels |
+| Tullio | tensor contractions, convolutions, stencils | not a general feedback-recurrence language | rewrite in index notation | the maintained choice for depthwise/Sobel-like kernels |
+| LoopVectorization | the same, historically | assumes iteration independence | macro around the loop | **maintenance-only; see the warning below** |
 | Tullio | tensor contractions, convolutions, stencils | not a general feedback-recurrence language | rewrite in index notation | domain-oriented alternative for regular array algebra |
 | explicit SIMD.jl | complete manual control | works if lanes are independent instances | vector loads, stores, tails, and packet-aware code | low-level foundation used by Interleave |
 | task parallelism | coarse independent jobs | yes, one recurrence per task | parallel driver/scheduler | complementary; Interleave keeps it explicit |
@@ -37,19 +38,27 @@ operations. The sequential loop remains sequential.
 
 ## Loop transformation tools
 
-[`LoopVectorization.@turbo`](https://juliasimd.github.io/LoopVectorization.jl/stable/api/)
-models nested loops, selects an order, and emits vectorized code. Its documented limitations
-include the assumption that loop iterations are independent. That makes it a natural tool
-for stencils, convolutions, and many reductions, but not a legal annotation for the recurrence
-axis targeted by Interleave.
+[`Tullio.jl`](https://github.com/mcabbott/Tullio.jl) expresses convolutions, stencils, broadcasts, and reductions in index
+notation and can cooperate with threading. It gives up the "keep an arbitrary scalar imperative
+kernel" goal in exchange for a much richer optimiser view of regular tensor algebra. It is
+actively maintained and is the tool to reach for on the kernels where Interleave declines.
 
-[`Tullio.jl`](https://github.com/mcabbott/Tullio.jl) expresses convolutions, stencils,
-broadcasts, and reductions in index notation and can cooperate with loop vectorization and
-threading. It gives up the “keep an arbitrary scalar imperative kernel” goal in exchange for
-a much richer optimiser view of regular tensor algebra.
+!!! warning "LoopVectorization is no longer the answer here"
+    Earlier revisions of this documentation recommended [`LoopVectorization.@turbo`](https://github.com/JuliaSIMD/LoopVectorization.jl)
+    for stencil-shaped kernels. That recommendation is withdrawn, for two reasons.
 
-These tools are not universally competing. A real application can use Tullio or
-LoopVectorization for an explicit stencil stage and Interleave for the following implicit solve.
+    It is maintained through the SciML Small Grants programme rather than actively developed,
+    and **active support for Julia ≥ 1.11 has been dropped**: on those versions `@turbo`
+    simply runs `@inbounds @fastmath` instead.
+
+    That fallback is specifically wrong for this project. `@fastmath` licenses FMA
+    contraction, which changes the order of operations and breaks the bit-exact
+    scalar ↔ vectorized agreement that is invariant 1 here. A tool that silently applies the
+    one thing the package forbids cannot be recommended alongside it, whatever its merits on
+    Julia 1.10.
+
+These tools are not universally competing. A real application can use Tullio for an explicit
+stencil stage and Interleave for the following implicit solve.
 
 ## Explicit vector programming
 

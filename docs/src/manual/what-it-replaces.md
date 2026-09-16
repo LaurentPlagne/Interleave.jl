@@ -58,8 +58,10 @@ Everything below was measured by `bench/runall.jl` on an Apple M-series machine 
 - `@simd` on the forward sweep is simply illegal: `X[i]` depends on `X[i-1]`. The
   [performance tips](https://docs.julialang.org/en/v1/manual/performance-tips/) warn that the
   macro promises reorderable iterations and produces wrong results otherwise.
-- `LoopVectorization.@turbo` assumes iteration independence, so it is illegal on the same
-  axis for the same reason.
+- `LoopVectorization.@turbo` assumed iteration independence, so it was illegal on the same
+  axis for the same reason — and it is in any case no longer a live option here, being
+  maintenance-only and falling back to `@inbounds @fastmath` on Julia ≥ 1.11, which breaks the
+  bit-exactness this package guarantees.
 
 The one alternative that *does* work is to transpose your data into a global SoA layout and
 rewrite the kernel as "time outside, instances inside", with `@simd` on the instance loop.
@@ -291,10 +293,11 @@ The plain Julia loop already reaches **40.6 GFlop/s**: LLVM auto-vectorizes alon
 contiguous axis without being asked. DLI at `P=16` gives **0.43×** — that is **2.3× slower
 than doing nothing**.
 
-**What you should use instead:** [NNlib](https://fluxml.ai/NNlib.jl/stable/)'s
-`depthwiseconv` for the standard primitive, `LoopVectorization.@turbo` for a custom variant,
-or [Tullio.jl](https://github.com/mcabbott/Tullio.jl) in index notation. All three are
-designed for exactly this shape.
+**What you should use instead:** [NNlib](https://fluxml.ai/NNlib.jl/stable/)'s `depthwiseconv` for the standard
+primitive, or [Tullio.jl](https://github.com/mcabbott/Tullio.jl) in index notation for a custom variant. Both are designed for
+exactly this shape and both are maintained. (`LoopVectorization.@turbo` was the third
+suggestion here; see [Positioning and alternatives](alternatives.md) for why it was
+withdrawn.)
 
 **What Interleave offers here:** set `P = 1` and the same kernel returns to parity (1.05×).
 That is the useful property — the escape hatch is one character, not a rewrite.
@@ -303,9 +306,8 @@ That is the useful property — the escape hatch is one character, not a rewrite
 
 Same story: a 43.4 GFlop/s reference, `P=8` gives 0.88×, and `P=1` restores parity.
 
-**Instead:** `LoopVectorization.@turbo`, or
-[ImageFiltering.jl](https://juliaimages.org/stable/pkgs/filtering/) for standard
-`imfilter`-shaped work.
+**Instead:** [Tullio.jl](https://github.com/mcabbott/Tullio.jl), or [ImageFiltering.jl](https://juliaimages.org/stable/pkgs/filtering/) for standard `imfilter`-shaped
+work.
 
 These two negative cases are the reason the package documents a decision rule rather than a
 speedup claim.

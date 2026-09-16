@@ -65,8 +65,8 @@ later stage already consumes that layout or when its long inner loop is especial
   is the idiomatic first choice for one system and provides a specialised solver. It does
   not itself express SIMD across thousands of independent systems.
 - `@simd` is not a legal fix for the forward or backward sweep: Julia defines it as a promise
-  that iterations may be reordered. [`LoopVectorization.@turbo`](https://juliasimd.github.io/LoopVectorization.jl/stable/api/)
-  likewise assumes independent iterations. Both are excellent when that premise is true.
+  that iterations may be reordered. `LoopVectorization.@turbo` likewise assumed independent
+  iterations. Both are excellent when that premise is true — it simply is not, here.
 - A hand-written [`SIMD.jl`](https://github.com/eschnett/SIMD.jl) kernel can perform the same
   cross-system vectorization with maximum control. The price is explicit loads, stores, tails,
   and a second vector-specific kernel. Interleave uses `SIMD.jl` as its element type while
