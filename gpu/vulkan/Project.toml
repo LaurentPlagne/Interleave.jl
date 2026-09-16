@@ -9,4 +9,4 @@ Interleave = {path = "../.."}
 
 [compat]
 Vulkan = "0.6"
-julia = "1.10"
+julia = "1.11"

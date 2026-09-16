@@ -10,4 +10,4 @@ Interleave = {path = "../.."}
 [compat]
 AMDGPU = "2"
 KernelAbstractions = "0.9"
-julia = "1.10"
+julia = "1.11"

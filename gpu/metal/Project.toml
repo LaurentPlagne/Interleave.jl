@@ -10,4 +10,4 @@ Interleave = {path = "../.."}
 [compat]
 KernelAbstractions = "0.9"
 Metal = "1.10"
-julia = "1.10"
+julia = "1.11"
