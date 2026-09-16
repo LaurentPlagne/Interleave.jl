@@ -124,6 +124,16 @@ The same ten scalar kernels, the same driver, the same commit, on two backends. 
 only — no host transfers — and every case is validated against the scalar CPU oracle before it
 is timed.
 
+| | Metal | CUDA |
+|---|---|---|
+| device | Apple M1 Max, 32 GPU cores, unified memory | NVIDIA Tesla T4, 15360 MiB |
+| driver / runtime | Metal 4 | driver 580.82.07, CUDA 13.0 |
+| Julia package | Metal.jl 1.11.0 | CUDA.jl 6 |
+| host | macOS, 64 GB | Google Colab, 2 vCPU |
+
+Reproduce either with `./gpu/run_remote.sh`, which records the device block alongside the
+table.
+
 | kernel | recurrence? | Metal, M1 Max | CUDA, T4 |
 |---|:---:|---:|---:|
 | Thomas | yes | 0.586 ms | **0.245 ms** |
