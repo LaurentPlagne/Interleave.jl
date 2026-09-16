@@ -10,11 +10,11 @@ on:
         type: boolean
         default: false
       nvidia_runner:
-        description: 'GitHub GPU larger-runner name/label (for example, the configured T4 runner)'
+        description: 'Label of a self-hosted NVIDIA/CUDA runner'
         type: string
         required: false
       amd_runner:
-        description: 'Configured AMD/ROCm runner name/label'
+        description: 'Label of a self-hosted AMD/ROCm runner'
         type: string
         required: false
   release:
@@ -93,13 +93,24 @@ jobs:
             macos-metal.txt
             macos-metal-all.txt
 
-  # Standard GitHub-hosted runners do not expose a GPU. GitHub's managed GPU
-  # larger runner is a 4-vCPU Tesla T4. Its workflow label is the runner name
-  # created in the repository/organization settings, so it is passed explicitly
-  # (or through the repository variable below). It is enabled only for releases
-  # or an explicit workflow_dispatch input because larger runners are metered.
+  # Standard GitHub-hosted runners do not expose a GPU.
+  #
+  # ⚠️ GitHub's *managed* GPU larger runners are NOT an option for this repository:
+  # they require an organization on a Team or Enterprise Cloud plan, and
+  # LaurentPlagne/Interleave.jl is a personal account. There is no label to create.
+  # See docs/src/manual/gpu.md for the ways to actually obtain NVIDIA numbers.
+  #
+  # This job therefore expects the label of a **self-hosted** runner (a workstation,
+  # a lab machine, or a rented box registered under Settings → Actions → Runners),
+  # supplied through INTERLEAVE_NVIDIA_RUNNER or the dispatch input. Without one it
+  # is simply skipped.
+  #
+  # Security note: a self-hosted runner on a public repository is normally unsafe
+  # because a fork's pull request would execute arbitrary code on it. This workflow
+  # has no `pull_request` trigger, which is what makes the arrangement acceptable.
+  # Do not add one.
   ka-nvidia:
-    name: KernelAbstractions benchmark / NVIDIA CUDA
+    name: KernelAbstractions benchmark / NVIDIA CUDA (self-hosted)
     if: ${{ (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_gpu)) && (vars.INTERLEAVE_NVIDIA_RUNNER != '' || inputs.nvidia_runner != '') }}
     runs-on: ${{ inputs.nvidia_runner || vars.INTERLEAVE_NVIDIA_RUNNER }}
     timeout-minutes: 45
@@ -125,9 +136,10 @@ jobs:
           path: nvidia-cuda.txt
 
   ka-amd:
-    name: KernelAbstractions benchmark / AMDGPU ROCm
-    # GitHub does not publish an AMD/ROCm hosted label. Set the input or
-    # variable to the AMD/ROCm fleet label supplied by the provider.
+    name: KernelAbstractions benchmark / AMDGPU ROCm (self-hosted)
+    # Same arrangement as ka-nvidia: GitHub publishes no AMD/ROCm hosted label, so
+    # this expects a self-hosted or provider-supplied ROCm runner label in
+    # INTERLEAVE_AMD_RUNNER. Dormant until one exists.
     if: ${{ (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.run_gpu)) && (vars.INTERLEAVE_AMD_RUNNER != '' || inputs.amd_runner != '') }}
     runs-on: ${{ inputs.amd_runner || vars.INTERLEAVE_AMD_RUNNER }}
     timeout-minutes: 45

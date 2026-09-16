@@ -21,7 +21,17 @@ is a weak-dependency extension activated by KernelAbstractions. The old [`vulkan
 directory is retained as an explicitly unsupported ABI experiment, but is no longer built or
 benchmarked by CI.
 
-The CUDA job targets the name/label assigned when a GitHub-managed Tesla-T4 larger runner is
-created, on releases or an explicit GPU workflow dispatch. Set `INTERLEAVE_NVIDIA_RUNNER` (or
-the dispatch input) to that name. There is no standard GitHub-hosted AMD/ROCm label; set
-`INTERLEAVE_AMD_RUNNER` to the exact label of an AMD-provided or institutional ROCm runner.
+GitHub's managed GPU larger runners are **not** available to this repository: they require an
+organization on a Team or Enterprise plan, and this is a personal account. The `ka-nvidia` and
+`ka-amd` jobs therefore expect the label of a **self-hosted** runner in
+`INTERLEAVE_NVIDIA_RUNNER` / `INTERLEAVE_AMD_RUNNER`, and stay dormant without one.
+
+For a one-shot measurement on any GPU machine, use [`run_remote.sh`](run_remote.sh):
+
+```bash
+./gpu/run_remote.sh cuda     # or amdgpu, or metal; omit to guess from the hardware
+```
+
+It installs Julia if needed, records the device, resolves the matching environment, and runs
+the suite. Only the vendor driver has to be present — CUDA.jl and AMDGPU.jl ship their own
+toolchains as Julia artifacts.

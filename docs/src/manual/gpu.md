@@ -76,20 +76,47 @@ The repository workflow mirrors the multi-target structure used by Legolas++:
 - Linux x86-64 runs the complete `BenchmarkTools` CPU suite;
 - macOS 14 on Apple Silicon runs the same CPU suite and all validation kernels through
   the resident Metal KernelAbstractions driver;
-- an optional NVIDIA CUDA job runs on an organization-configured GPU runner;
-- an optional AMDGPU/ROCm job runs on an organization-configured self-hosted runner.
+- an optional NVIDIA CUDA job, dormant until a runner label is configured;
+- an optional AMDGPU/ROCm job, dormant on the same terms.
 
-The CPU, Metal, CUDA, and AMDGPU jobs upload their raw output and append it to the GitHub job
-summary. The CUDA job uses GitHub's managed GPU runner on releases or explicit GPU dispatches;
-the AMDGPU job is skipped unless `INTERLEAVE_AMD_RUNNER` names a real ROCm runner. Standard
-GitHub-hosted runners remain CPU-only, and GitHub does not provide a universal AMD label.
+Each job uploads its raw output and appends it to the GitHub job summary.
 
-The CUDA job uses GitHub's managed larger runner (Tesla T4) on releases or when a manual
-dispatch enables `run_gpu`. Set `INTERLEAVE_NVIDIA_RUNNER` to the runner name created in the
-repository/organization settings, or pass that name as the dispatch input. For AMDGPU, set
-`INTERLEAVE_AMD_RUNNER` to the exact label of an AMD-provided or institutional ROCm runner;
-GitHub does not publish an AMD/ROCm hosted label. GitHub's runner name and label syntax is documented in its
-[runner selection guide](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
+### Obtaining NVIDIA numbers
+
+!!! warning "GitHub's managed GPU runners are not available here"
+    GitHub-hosted *larger* runners, GPU ones included, require an organization on a Team or
+    Enterprise Cloud plan. `LaurentPlagne/Interleave.jl` is a personal account, so there is
+    no runner to create and no label to copy. Earlier revisions of this page and of the
+    workflow described a Tesla-T4 setup that cannot be performed on this repository.
+
+Three paths actually work, in increasing order of commitment:
+
+1. **Run the suite by hand on any NVIDIA machine.** This is what Legolas++ did: its published
+   NVIDIA figures come from a workstation with a GeForce RTX 2060 SUPER, not from CI.
+   [`gpu/run_remote.sh`](https://github.com/laurentplagne/Interleave.jl/blob/main/gpu/run_remote.sh)
+   installs Julia if needed, records the device, resolves `gpu/cuda`, and runs the suite:
+
+   ```bash
+   git clone https://github.com/LaurentPlagne/Interleave.jl && cd Interleave.jl
+   ./gpu/run_remote.sh cuda
+   ```
+
+   It works unchanged on a rented box (RunPod, Vast.ai, Lambda), on a Colab runtime, and on
+   an institutional workstation. Only the vendor *driver* is required: CUDA.jl ships its own
+   toolkit as Julia artifacts.
+
+2. **Register a self-hosted runner** under *Settings → Actions → Runners*, then set the
+   repository variable `INTERLEAVE_NVIDIA_RUNNER` (or the `nvidia_runner` dispatch input) to
+   its label. The `ka-nvidia` job then runs on releases and on a manual dispatch with
+   `run_gpu=true`. A self-hosted runner on a public repository is only safe because this
+   workflow has no `pull_request` trigger; do not add one.
+
+3. **Use the JuliaGPU Buildkite infrastructure**, which is how CUDA.jl and
+   KernelAbstractions.jl test. It is free and permanent, but requires coordination on the
+   JuliaLang Slack `#gpu` channel. See [JuliaGPU/buildkite](https://github.com/JuliaGPU/buildkite).
+
+The same three options apply to AMDGPU through `INTERLEAVE_AMD_RUNNER`; GitHub publishes no
+AMD/ROCm hosted label at all.
 
 ## Correctness contract
 

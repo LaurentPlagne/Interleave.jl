@@ -39,12 +39,15 @@ KernelAbstractions driver, batch-major device layout, and the shared all-kernel 
 
 The GitHub Actions workflow `Cross-platform benchmarks` runs on pushes to `main`, can be
 launched manually, on a release, or weekly. It runs the CPU suite on Linux and Apple Silicon,
-and benchmarks every validation kernel on Metal macOS. On a release, or when
-`workflow_dispatch` is launched with `run_gpu=true`, the CUDA job targets the configured name
-of GitHub's managed Tesla-T4 GPU larger runner. Set `INTERLEAVE_NVIDIA_RUNNER` (or provide the
-dispatch input) to that name. The AMDGPU job uses `INTERLEAVE_AMD_RUNNER` when an AMD/ROCm
-fleet label is available. Standard runners remain CPU-only. The Vulkan/SPIR-V prototype is
-deliberately outside this workflow for now.
+and benchmarks every validation kernel on Metal macOS.
+
+NVIDIA and AMD numbers are **not** produced by CI. GitHub's managed GPU runners require an
+organization on a Team or Enterprise plan, which this repository is not, so the `ka-nvidia`
+and `ka-amd` jobs stay dormant unless `INTERLEAVE_NVIDIA_RUNNER` / `INTERLEAVE_AMD_RUNNER`
+name a self-hosted runner. To produce NVIDIA numbers on any machine — a workstation, a rented
+box, or a Colab runtime — use `./gpu/run_remote.sh cuda`; only the vendor driver is required,
+since CUDA.jl ships its own toolkit. See the [GPU manual](docs/src/manual/gpu.md) for the
+three available paths. The Vulkan/SPIR-V prototype is deliberately outside this workflow.
 
 Interleave.jl is experimental. It is not registered yet; install the repository directly:
 
