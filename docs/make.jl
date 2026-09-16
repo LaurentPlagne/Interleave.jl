@@ -6,7 +6,7 @@ using Documenter.Remotes: GitHub
 const REPO = let root = dirname(@__DIR__)
     cmd = `git -C $root rev-parse --verify HEAD`
     if success(pipeline(cmd; stdout = devnull, stderr = devnull))
-        (; repo = GitHub("laurentplagne", "Interleave.jl"))
+        (; repo = GitHub("LaurentPlagne", "Interleave.jl"))
     else
         @info "repository has no commit: source links are disabled"
         (; remotes = nothing)
@@ -60,13 +60,18 @@ makedocs(;
     REPO...,
 )
 
+# ⚠️ La casse de `repo` doit correspondre EXACTEMENT à `ENV["GITHUB_REPOSITORY"]`.
+# Documenter vérifie que la seconde est une sous-chaîne de la première, sans normaliser la
+# casse : « laurentplagne » ne contient pas « LaurentPlagne », le critère échoue, et le
+# déploiement est abandonné en silence. Le job reste vert.
+#
 # `devbranch` doit être explicite. Laissé à `nothing`, Documenter tente de deviner la branche
 # de développement, et le checkout superficiel d'Actions ne lui permet pas toujours d'y
 # arriver : il retombe alors sur `master`, décide qu'un push sur `main` ne le concerne pas, et
 # **sort sans rien déployer ni signaler d'erreur**. Le job reste vert, `gh-pages` n'est jamais
 # créée, et le site annoncé par le README n'existe pas. C'est exactement ce qui s'est produit.
 deploydocs(
-    repo = "github.com/laurentplagne/Interleave.jl.git",
+    repo = "github.com/LaurentPlagne/Interleave.jl.git",
     devbranch = "main",
     push_preview = false,
 )
