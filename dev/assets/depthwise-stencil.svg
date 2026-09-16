@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" role="img" aria-labelledby="title desc">
+  <title id="title">Two legal SIMD directions for a depthwise stencil</title>
+  <desc id="desc">The left panel animates adjacent spatial output pixels processed together by ordinary compiler vectorization. The right panel animates the same coordinate across four independent feature maps using DLI.</desc>
+  <style>
+    :root{color-scheme:light dark}.bg{fill:#fff;stroke:#d0d7de}.panel{fill:#f6f8fa;stroke:#d0d7de}.ink{fill:#1f2328}.muted{fill:#57606a}
+    text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:12px}.heading{font-size:19px;font-weight:700}.stage-title{font-size:16px;font-weight:700}
+    .map{fill:url(#grid);stroke:#8c959f}.pattern-bg{fill:#fff}.pattern-line{stroke:#d0d7de}.window{fill:#4063d8;fill-opacity:.14;stroke:#4063d8;stroke-width:2}.outputs{fill:#389826;fill-opacity:.75}.packet{fill:#e3a008;fill-opacity:.18;stroke:#e3a008;stroke-width:2}
+    .spatial{animation:spatial 4s steps(3,end) infinite}.channels{animation:channels 4s steps(3,end) infinite}.link{stroke:#8c959f;stroke-width:1.5;stroke-dasharray:4 3}
+    @keyframes spatial{from{transform:translateX(0)}to{transform:translateX(90px)}}@keyframes channels{from{transform:translateX(0)}to{transform:translateX(54px)}}
+    @media(prefers-color-scheme:dark){.bg{fill:#0d1117;stroke:#30363d}.panel{fill:#161b22;stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#9da7b3}.map{stroke:#6e7681}.link{stroke:#6e7681}.pattern-bg{fill:#0d1117}.pattern-line{stroke:#30363d}}
+    @media(prefers-reduced-motion:reduce){.spatial,.channels{animation:none}}
+  </style>
+  <defs><pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse"><rect class="pattern-bg" width="30" height="30"/><path class="pattern-line" d="M30 0H0V30" fill="none"/></pattern></defs>
+  <rect class="bg" x="1" y="1" width="958" height="428" rx="8"/>
+  <text class="heading ink" x="28" y="36">When the spatial loop is already vectorized, DLI competes with it</text>
+  <text class="muted" x="28" y="59">Both mappings are legal. Only measurement says which layout feeds the CPU better.</text>
+
+  <g transform="translate(28 84)">
+    <rect class="panel" width="438" height="310" rx="7"/><text class="stage-title ink" x="18" y="32">Ordinary layout: SIMD across pixels</text>
+    <text class="muted" x="18" y="53">one channel, contiguous inner loop</text>
+    <g transform="translate(92 83)">
+      <rect class="map" width="240" height="180"/>
+      <g class="spatial"><rect class="window" x="0" y="30" width="90" height="90"/><rect class="outputs" x="30" y="60" width="18" height="18" rx="3"/><rect class="outputs" x="60" y="60" width="18" height="18" rx="3"/><rect class="outputs" x="90" y="60" width="18" height="18" rx="3"/><rect class="outputs" x="120" y="60" width="18" height="18" rx="3"/></g>
+    </g>
+    <text class="muted" x="219" y="288" text-anchor="middle">four adjacent output pixels can advance together</text>
+  </g>
+
+  <g transform="translate(494 84)">
+    <rect class="panel" width="438" height="310" rx="7"/><text class="stage-title ink" x="18" y="32">DLI: SIMD across feature maps</text>
+    <text class="muted" x="18" y="53">same coordinate, four independent channels</text>
+    <g transform="translate(80 83)">
+      <rect class="map" x="0" y="0" width="150" height="42"/><rect class="map" x="0" y="51" width="150" height="42"/><rect class="map" x="0" y="102" width="150" height="42"/><rect class="map" x="0" y="153" width="150" height="42"/>
+      <g class="channels"><circle class="outputs" cx="48" cy="21" r="8"/><circle class="outputs" cx="48" cy="72" r="8"/><circle class="outputs" cx="48" cy="123" r="8"/><circle class="outputs" cx="48" cy="174" r="8"/><rect class="packet" x="34" y="6" width="28" height="183" rx="6"/></g>
+      <g class="link"><line x1="166" y1="21" x2="212" y2="21"/><line x1="166" y1="72" x2="212" y2="72"/><line x1="166" y1="123" x2="212" y2="123"/><line x1="166" y1="174" x2="212" y2="174"/></g>
+      <text class="ink" x="222" y="25">lane 1</text><text class="ink" x="222" y="76">lane 2</text><text class="ink" x="222" y="127">lane 3</text><text class="ink" x="222" y="178">lane 4</text>
+    </g>
+    <text class="muted" x="219" y="288" text-anchor="middle">packing changes the SIMD direction; it adds no independence</text>
+  </g>
+</svg>

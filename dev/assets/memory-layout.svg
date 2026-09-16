@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+  <title id="title">Independent scalar buffers transformed into data-layout interleaving</title>
+  <desc id="desc">A common input layout groups all steps of one job. Interleaved storage groups the same step of four jobs into a SIMD packet.</desc>
+  <style>
+    :root { color-scheme:light dark; }
+    .bg { fill:#fff; stroke:#d0d7de; }
+    .ink { fill:#1f2328; }
+    .muted { fill:#57606a; }
+    .cell { fill:#f6f8fa; stroke:#8c959f; }
+    .p1 { fill:#4063d8; }.p2 { fill:#cb3c33; }.p3 { fill:#389826; }.p4 { fill:#9558b2; }
+    .focus { fill:none; stroke:#e3a008; stroke-width:4; animation:scan 4s steps(4,end) infinite; }
+    text { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:13px; }
+    .heading { font-size:19px; font-weight:700; }
+    .inside { fill:#fff; font-size:12px; font-weight:650; text-anchor:middle; }
+    @keyframes scan { from { transform:translateX(0); } to { transform:translateX(600px); } }
+    @media (prefers-color-scheme:dark) {
+      .bg { fill:#0d1117; stroke:#30363d; }.ink { fill:#f0f6fc; }.muted { fill:#9da7b3; }
+      .cell { fill:#161b22; stroke:#6e7681; }
+    }
+    @media (prefers-reduced-motion:reduce) { .focus { animation:none; } }
+  </style>
+  <rect class="bg" x="1" y="1" width="958" height="358" rx="8"/>
+  <text class="heading ink" x="28" y="38">Memory is the mechanism</text>
+  <text class="muted" x="28" y="62">A packet contains one recurrence position from several independent jobs.</text>
+
+  <text class="ink" x="30" y="105" font-weight="700">Independent scalar buffers</text>
+  <text class="muted" x="30" y="128">job 1, then job 2, then job 3…</text>
+  <g transform="translate(278 86)">
+    <g class="p1"><rect x="0" y="0" width="38" height="54"/><rect x="40" y="0" width="38" height="54"/><rect x="80" y="0" width="38" height="54"/><rect x="120" y="0" width="38" height="54"/><rect x="160" y="0" width="38" height="54"/></g>
+    <g class="p2"><rect x="210" y="0" width="38" height="54"/><rect x="250" y="0" width="38" height="54"/><rect x="290" y="0" width="38" height="54"/><rect x="330" y="0" width="38" height="54"/><rect x="370" y="0" width="38" height="54"/></g>
+    <g class="p3"><rect x="420" y="0" width="38" height="54"/><rect x="460" y="0" width="38" height="54"/><rect x="500" y="0" width="38" height="54"/><rect x="540" y="0" width="38" height="54"/><rect x="580" y="0" width="38" height="54"/></g>
+    <g class="p4"><rect x="630" y="0" width="38" height="54"/></g>
+    <text class="inside" x="79" y="33">job 1</text><text class="inside" x="289" y="33">job 2</text><text class="inside" x="499" y="33">job 3</text><text class="inside" x="649" y="33">…</text>
+  </g>
+
+  <path d="M480 163v35" stroke="#8c959f" stroke-width="2" marker-end="url(#arrow)"/>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#8c959f"/></marker></defs>
+
+  <text class="ink" x="30" y="235" font-weight="700">DLI physical storage</text>
+  <text class="muted" x="30" y="258">step 1 packet, step 2 packet…</text>
+  <g transform="translate(278 212)">
+    <g>
+      <rect class="p1" x="0" y="0" width="29" height="54"/><rect class="p2" x="30" y="0" width="29" height="54"/><rect class="p3" x="60" y="0" width="29" height="54"/><rect class="p4" x="90" y="0" width="29" height="54"/>
+      <rect class="p1" x="150" y="0" width="29" height="54"/><rect class="p2" x="180" y="0" width="29" height="54"/><rect class="p3" x="210" y="0" width="29" height="54"/><rect class="p4" x="240" y="0" width="29" height="54"/>
+      <rect class="p1" x="300" y="0" width="29" height="54"/><rect class="p2" x="330" y="0" width="29" height="54"/><rect class="p3" x="360" y="0" width="29" height="54"/><rect class="p4" x="390" y="0" width="29" height="54"/>
+      <rect class="p1" x="450" y="0" width="29" height="54"/><rect class="p2" x="480" y="0" width="29" height="54"/><rect class="p3" x="510" y="0" width="29" height="54"/><rect class="p4" x="540" y="0" width="29" height="54"/>
+      <rect class="p1" x="600" y="0" width="29" height="54"/><rect class="p2" x="630" y="0" width="29" height="54"/><rect class="p3" x="660" y="0" width="29" height="54"/><rect class="p4" x="690" y="0" width="29" height="54"/>
+      <rect class="focus" x="-5" y="-5" width="129" height="64" rx="5"/>
+    </g>
+    <text class="muted" x="59" y="78" text-anchor="middle">Vec at i=1</text>
+    <text class="muted" x="209" y="78" text-anchor="middle">i=2</text>
+    <text class="muted" x="359" y="78" text-anchor="middle">i=3</text>
+    <text class="muted" x="509" y="78" text-anchor="middle">i=4</text>
+    <text class="muted" x="659" y="78" text-anchor="middle">i=5</text>
+  </g>
+</svg>

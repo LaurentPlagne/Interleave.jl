@@ -1,0 +1,80 @@
+.interleave-hero {
+  margin: 1rem 0 1.5rem;
+  padding: 1.4rem 1.6rem;
+  border: 1px solid var(--documenter-border-color, #d7dce2);
+  border-left: 0.35rem solid #4063d8;
+  background: color-mix(in srgb, #4063d8 7%, transparent);
+}
+
+.interleave-hero h2 {
+  margin-top: 0;
+}
+
+.interleave-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.interleave-card {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--documenter-border-color, #d7dce2);
+  border-radius: 0.35rem;
+}
+
+.interleave-card h3 {
+  margin: 0 0 0.5rem;
+}
+
+.interleave-card p:last-child {
+  margin-bottom: 0;
+}
+
+.interleave-visual {
+  display: block;
+  width: min(100%, 960px);
+  margin: 1.25rem auto 1.75rem;
+}
+
+/* Keep labels readable on narrow screens; the figure becomes horizontally scrollable. */
+.content p:has(> img[src*="assets/"]) {
+  overflow-x: auto;
+}
+
+.content p > img[src*="assets/"] {
+  min-width: 820px;
+}
+
+.interleave-caption {
+  max-width: 52rem;
+  margin: -1rem auto 1.5rem;
+  text-align: center;
+  color: var(--documenter-text-light, #586069);
+  font-size: 0.9rem;
+}
+
+.interleave-path {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 1.25rem 0;
+}
+
+.interleave-step {
+  padding: 0.8rem;
+  border-top: 0.22rem solid #389826;
+  background: color-mix(in srgb, #389826 7%, transparent);
+}
+
+.interleave-step strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 700px) {
+  .interleave-grid,
+  .interleave-path {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="title desc">
+  <title id="title">Four independent biquad filters advancing together</title>
+  <desc id="desc">Each audio channel has its own feedback state. A moving vertical packet advances the same sample index for all channels without mixing their states.</desc>
+  <style>
+    :root{color-scheme:light dark}.bg{fill:#fff;stroke:#d0d7de}.panel{fill:#f6f8fa;stroke:#d0d7de}.ink{fill:#1f2328}.muted{fill:#57606a}
+    .wave{fill:none;stroke-width:2.5}.w1{stroke:#4063d8}.w2{stroke:#cb3c33}.w3{stroke:#389826}.w4{stroke:#9558b2}.state{fill:none;stroke:#8c959f;stroke-width:1.5;marker-end:url(#arrow)}
+    .packet{fill:#e3a008;opacity:.2;stroke:#e3a008;stroke-width:2;animation:sweep 3.2s linear infinite}text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px}.heading{font-size:19px;font-weight:700}
+    @keyframes sweep{from{transform:translateX(0)}to{transform:translateX(655px)}}
+    @media(prefers-color-scheme:dark){.bg{fill:#0d1117;stroke:#30363d}.panel{fill:#161b22;stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#9da7b3}}
+    @media(prefers-reduced-motion:reduce){.packet{animation:none}}
+  </style>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#8c959f"/></marker></defs>
+  <rect class="bg" x="1" y="1" width="958" height="398" rx="8"/>
+  <text class="heading ink" x="28" y="36">Feedback blocks time-axis SIMD — not channel-axis SIMD</text>
+  <text class="muted" x="28" y="60">Each lane owns x[n−1], x[n−2], y[n−1], and y[n−2] for one channel.</text>
+  <rect class="panel" x="28" y="83" width="904" height="278" rx="7"/>
+  <g transform="translate(205 110)">
+    <path class="wave w1" d="M0 20C30-12 60 52 90 20S150-12 180 20S240 52 270 20S330-12 360 20S420 52 450 20S510-12 540 20S600 52 660 20"/>
+    <path class="wave w2" d="M0 82C45 48 75 115 120 82S195 48 240 82S315 115 360 82S435 48 480 82S555 115 600 82S630 55 660 82"/>
+    <path class="wave w3" d="M0 144C25 112 55 176 80 144S135 112 160 144S215 176 240 144S295 112 320 144S375 176 400 144S455 112 480 144S535 176 560 144S620 112 660 144"/>
+    <path class="wave w4" d="M0 206C55 170 85 242 140 206S225 170 280 206S365 242 420 206S505 170 560 206S625 238 660 206"/>
+    <rect class="packet" x="-9" y="-18" width="28" height="250" rx="6"/>
+    <path class="state" d="M70 32c15 20 40 20 55 0"/><path class="state" d="M70 94c15 20 40 20 55 0"/><path class="state" d="M70 156c15 20 40 20 55 0"/><path class="state" d="M70 218c15 20 40 20 55 0"/>
+  </g>
+  <g class="ink"><text x="55" y="136">channel 1</text><text x="55" y="198">channel 2</text><text x="55" y="260">channel 3</text><text x="55" y="322">channel 4</text></g>
+  <text class="muted" x="480" y="385" text-anchor="middle">time / sample index n →</text>
+</svg>
+

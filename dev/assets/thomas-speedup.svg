@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 450" role="img" aria-labelledby="title desc">
+  <title id="title">Thomas solver speedup as packet size increases</title>
+  <desc id="desc">Measured speedups are one, two, three point nine seven, seven point two seven, thirteen point six, and nineteen point three eight for packet sizes one through thirty-two.</desc>
+  <style>
+    :root { color-scheme:light dark; }.bg { fill:#fff; stroke:#d0d7de; }.plot { fill:#f6f8fa; stroke:#8c959f; }
+    .ink { fill:#1f2328; }.muted { fill:#57606a; }.grid { stroke:#d8dee4; }.axis { stroke:#57606a; stroke-width:1.5; }
+    .ideal { fill:none; stroke:#8c959f; stroke-width:2; stroke-dasharray:7 5; }.measured { fill:none; stroke:#4063d8; stroke-width:4; }
+    .point { fill:#4063d8; stroke:#fff; stroke-width:2; }.value { fill:#1f2328; font-weight:700; }
+    text { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:12px; }.heading { font-size:19px; font-weight:700; }
+    @media (prefers-color-scheme:dark) {.bg{fill:#0d1117;stroke:#30363d}.plot{fill:#161b22;stroke:#6e7681}.ink,.value{fill:#f0f6fc}.muted{fill:#9da7b3}.grid{stroke:#30363d}.axis{stroke:#9da7b3}.point{stroke:#161b22}}
+  </style>
+  <rect class="bg" x="1" y="1" width="818" height="448" rx="8"/>
+  <text class="heading ink" x="28" y="34">A packet can be wider than the hardware vector</text>
+  <text class="muted" x="28" y="55">Thomas, 65,536 × 64, Float32, Apple M1, measured 15 Sep 2026.</text>
+  <rect class="plot" x="82" y="76" width="670" height="300"/>
+  <g class="grid"><line x1="82" y1="376" x2="752" y2="376"/><line x1="82" y1="301" x2="752" y2="301"/><line x1="82" y1="226" x2="752" y2="226"/><line x1="82" y1="151" x2="752" y2="151"/><line x1="82" y1="76" x2="752" y2="76"/></g>
+  <g class="axis"><line x1="82" y1="376" x2="752" y2="376"/><line x1="82" y1="76" x2="82" y2="376"/></g>
+  <g class="muted"><text x="68" y="380" text-anchor="end">0×</text><text x="68" y="305" text-anchor="end">8×</text><text x="68" y="230" text-anchor="end">16×</text><text x="68" y="155" text-anchor="end">24×</text><text x="68" y="80" text-anchor="end">32×</text></g>
+  <path class="ideal" d="M115 367L237 357L359 339L481 301L603 226L725 76"/>
+  <path class="measured" d="M115 367L237 357L359 339L481 308L603 249L725 194"/>
+  <g class="point"><circle cx="115" cy="367" r="7"/><circle cx="237" cy="357" r="7"/><circle cx="359" cy="339" r="7"/><circle cx="481" cy="308" r="7"/><circle cx="603" cy="249" r="7"/><circle cx="725" cy="194" r="7"/></g>
+  <g class="value"><text x="115" y="352" text-anchor="middle">1.00×</text><text x="237" y="342" text-anchor="middle">2.00×</text><text x="359" y="324" text-anchor="middle">3.97×</text><text x="481" y="293" text-anchor="middle">7.27×</text><text x="603" y="234" text-anchor="middle">13.60×</text><text x="725" y="179" text-anchor="middle">19.38×</text></g>
+  <g class="muted"><text x="115" y="397" text-anchor="middle">1</text><text x="237" y="397" text-anchor="middle">2</text><text x="359" y="397" text-anchor="middle">4</text><text x="481" y="397" text-anchor="middle">8</text><text x="603" y="397" text-anchor="middle">16</text><text x="725" y="397" text-anchor="middle">32</text></g>
+  <text class="ink" x="417" y="429" text-anchor="middle">packet size P</text>
+  <text class="ink" transform="translate(22 226) rotate(-90)" text-anchor="middle">speedup vs scalar reference</text>
+  <line class="measured" x1="565" y1="33" x2="600" y2="33"/><text class="muted" x="608" y="37">measured</text>
+  <line class="ideal" x1="685" y1="33" x2="720" y2="33"/><text class="muted" x="728" y="37">ideal P×</text>
+</svg>

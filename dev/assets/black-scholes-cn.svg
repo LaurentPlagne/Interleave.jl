@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="title desc">
+  <title id="title">A Crank–Nicolson time step across independent option grids</title>
+  <desc id="desc">Three animated stages show several option grids, construction of an explicit right-hand side, and an implicit Thomas forward and backward sweep. Every SIMD lane follows a different option.</desc>
+  <style>
+    :root{color-scheme:light dark}.bg{fill:#fff;stroke:#d0d7de}.panel{fill:#f6f8fa;stroke:#d0d7de}.ink{fill:#1f2328}.muted{fill:#57606a}
+    .heading{font-size:19px;font-weight:700}.stage-title{font-size:16px;font-weight:700}text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:12px}
+    .grid{stroke:#8c959f;stroke-width:2;fill:none}.lane1{stroke:#4063d8}.lane2{stroke:#cb3c33}.lane3{stroke:#389826}.lane4{stroke:#9558b2}.curve{fill:none;stroke-width:2.5}
+    .node{fill:#fff;stroke:#8c959f;stroke-width:1.5}.active{fill:#e3a008;stroke:#b57c00;stroke-width:2}.flow{fill:none;stroke:#4063d8;stroke-width:2.5;marker-end:url(#arrow)}
+    .phase-a{animation:phaseA 9s infinite}.phase-b{animation:phaseB 9s infinite}.phase-c{animation:phaseC 9s infinite}.runner{animation:sweep 2.6s steps(5,end) infinite}
+    @keyframes phaseA{0%,30%{opacity:1}34%,100%{opacity:.28}}@keyframes phaseB{0%,30%{opacity:.28}34%,63%{opacity:1}67%,100%{opacity:.28}}@keyframes phaseC{0%,63%{opacity:.28}67%,100%{opacity:1}}
+    @keyframes sweep{from{transform:translateX(0)}to{transform:translateX(150px)}}
+    @media(prefers-color-scheme:dark){.bg{fill:#0d1117;stroke:#30363d}.panel{fill:#161b22;stroke:#30363d}.ink{fill:#f0f6fc}.muted{fill:#9da7b3}.node{fill:#0d1117;stroke:#6e7681}.grid{stroke:#6e7681}}
+    @media(prefers-reduced-motion:reduce){.phase-a,.phase-b,.phase-c,.runner{animation:none;opacity:1}}
+  </style>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#4063d8"/></marker></defs>
+  <rect class="bg" x="1" y="1" width="958" height="438" rx="8"/>
+  <text class="heading ink" x="28" y="36">Double recurrence, one independent option per lane</text>
+  <text class="muted" x="28" y="59">A time step cannot start early, and its implicit solve cannot skip a grid point.</text>
+
+  <g class="phase-a" transform="translate(28 86)">
+    <rect class="panel" width="276" height="282" rx="7"/><text class="stage-title ink" x="18" y="32">1 · option population</text>
+    <text class="muted" x="18" y="53">lane = one price grid V(S)</text>
+    <path class="curve lane1" d="M34 218C70 215 100 202 128 174S184 100 238 83"/>
+    <path class="curve lane2" d="M34 229C77 225 113 207 142 169S196 94 238 76"/>
+    <path class="curve lane3" d="M34 239C80 234 118 212 150 167S204 88 238 70"/>
+    <path class="curve lane4" d="M34 249C84 244 126 216 159 164S212 82 238 65"/>
+    <text class="muted" x="25" y="267">asset-price grid S →</text>
+  </g>
+
+  <g class="phase-b" transform="translate(342 86)">
+    <rect class="panel" width="276" height="282" rx="7"/><text class="stage-title ink" x="18" y="32">2 · explicit stencil</text>
+    <text class="muted" x="18" y="53">build RHS at time t</text>
+    <g transform="translate(45 116)">
+      <path class="grid" d="M0 0H190M0 55H190M0 110H190M0 165H190"/>
+      <g class="node">
+        <circle cx="0" cy="0" r="7"/><circle cx="38" cy="0" r="7"/><circle cx="76" cy="0" r="7"/><circle cx="114" cy="0" r="7"/><circle cx="152" cy="0" r="7"/><circle cx="190" cy="0" r="7"/>
+        <circle cx="0" cy="55" r="7"/><circle cx="38" cy="55" r="7"/><circle cx="76" cy="55" r="7"/><circle cx="114" cy="55" r="7"/><circle cx="152" cy="55" r="7"/><circle cx="190" cy="55" r="7"/>
+        <circle cx="0" cy="110" r="7"/><circle cx="38" cy="110" r="7"/><circle cx="76" cy="110" r="7"/><circle cx="114" cy="110" r="7"/><circle cx="152" cy="110" r="7"/><circle cx="190" cy="110" r="7"/>
+        <circle cx="0" cy="165" r="7"/><circle cx="38" cy="165" r="7"/><circle cx="76" cy="165" r="7"/><circle cx="114" cy="165" r="7"/><circle cx="152" cy="165" r="7"/><circle cx="190" cy="165" r="7"/>
+      </g>
+      <g class="runner"><rect x="-11" y="-17" width="22" height="199" rx="5" fill="#e3a008" opacity=".2"/><circle class="active" cx="0" cy="0" r="8"/><circle class="active" cx="0" cy="55" r="8"/><circle class="active" cx="0" cy="110" r="8"/><circle class="active" cx="0" cy="165" r="8"/></g>
+    </g>
+  </g>
+
+  <g class="phase-c" transform="translate(656 86)">
+    <rect class="panel" width="276" height="282" rx="7"/><text class="stage-title ink" x="18" y="32">3 · implicit solve</text>
+    <text class="muted" x="18" y="53">Thomas at time t + Δt</text>
+    <g transform="translate(42 115)">
+      <path class="grid" d="M0 0H190M0 55H190M0 110H190M0 165H190"/>
+      <path class="flow" d="M0-16H190"/><path class="flow" d="M190 181H0"/>
+      <g class="node">
+        <circle cx="0" cy="0" r="7"/><circle cx="38" cy="0" r="7"/><circle cx="76" cy="0" r="7"/><circle cx="114" cy="0" r="7"/><circle cx="152" cy="0" r="7"/><circle cx="190" cy="0" r="7"/>
+        <circle cx="0" cy="55" r="7"/><circle cx="38" cy="55" r="7"/><circle cx="76" cy="55" r="7"/><circle cx="114" cy="55" r="7"/><circle cx="152" cy="55" r="7"/><circle cx="190" cy="55" r="7"/>
+        <circle cx="0" cy="110" r="7"/><circle cx="38" cy="110" r="7"/><circle cx="76" cy="110" r="7"/><circle cx="114" cy="110" r="7"/><circle cx="152" cy="110" r="7"/><circle cx="190" cy="110" r="7"/>
+        <circle cx="0" cy="165" r="7"/><circle cx="38" cy="165" r="7"/><circle cx="76" cy="165" r="7"/><circle cx="114" cy="165" r="7"/><circle cx="152" cy="165" r="7"/><circle cx="190" cy="165" r="7"/>
+      </g>
+    </g>
+  </g>
+  <path class="flow" d="M800 397C760 425 205 425 158 391"/><text class="muted" x="480" y="416" text-anchor="middle">repeat for 32 ordered time steps</text>
+</svg>
