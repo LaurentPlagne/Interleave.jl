@@ -684,14 +684,24 @@ end
         src = [T(y + 100i + 10_000k) for y in 1:ny, i in 1:nx, k in 1:nz]
         A = Interleave.Array{T,3,8}(src)
 
-        for (perm, dims) in (((2, 1, 3), (nx, ny, nz)),    # le lot change d'axe
-                             ((3, 2, 1), (nz, nx, ny)),    # idem, avec l'axe 3
-                             ((1, 3, 2), (ny, nz, nx)))    # le lot ne bouge pas
+        # ⚠️ Inclure des permutations NON involutives. La convention de Base est
+        # `dest[J] == src[J[invperm(perm)]]` ; pour une transposition `perm == invperm(perm)`,
+        # donc une implémentation fausse passe quand même. Les 3-cycles (2,3,1) et (3,1,2)
+        # sont les seuls à la distinguer — et un cycle ADI complet en contient forcément un,
+        # par parité.
+        for (perm, dims) in (((2, 1, 3), (nx, ny, nz)),    # transposition, le lot bouge
+                             ((3, 2, 1), (nz, nx, ny)),    # transposition, axe 3
+                             ((1, 3, 2), (ny, nz, nx)),    # le lot ne bouge pas
+                             ((2, 3, 1), (nx, nz, ny)),    # 3-cycle
+                             ((3, 1, 2), (nz, ny, nx)))    # 3-cycle inverse
             B = Interleave.Array{T,3,8}(undef, dims...)
             @test permutedims!(B, A, perm) === B
             @test B isa Interleave.Array{T,3,8}
             idx = Iterators.product(map(Base.OneTo, dims)...)
-            @test all(B[J...] == A[ntuple(k -> J[perm[k]], 3)...] for J in idx)
+            # Étalon : `permutedims` de Base sur le tableau scalaire équivalent.
+            ref = permutedims(src, perm)
+            @test size(B) == size(ref)
+            @test all(B[J...] === ref[J...] for J in idx)
             # Le chemin rapide doit coïncider avec le repli générique, bit à bit.
             G = Interleave.Array{T,3,8}(undef, dims...)
             Interleave._generic_permutedims!(G, A, perm)

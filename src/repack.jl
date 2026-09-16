@@ -33,28 +33,30 @@ end
 # transposition de tuiles P×P, et l'ordre des boucles y décide de tout — l'indice de LANE est
 # contigu dans `flat`, donc il doit être le plus interne des deux côtés. Une première version
 # l'avait en position externe et lisait de foulée P : 1.4× au lieu de 2.6×.
-function _swap_batch!(dest::Array{T,3,P}, src::Array{T,3,P}, ::Val{M}) where {T,P,M}
+# `IP` est `invperm(perm)` figé dans le type, donc `m`, l'axe spectateur et la construction
+# de l'indice source sont résolus à la compilation. Couvre les QUATRE permutations de N=3 qui
+# déplacent le lot : les deux transpositions et les deux 3-cycles.
+function _swap_batch!(dest::Array{T,3,P}, src::Array{T,3,P}, ::Val{IP}) where {T,P,IP}
     d, s = dest.flat, src.flat
+    m = IP[1]                       # l'axe de `dest` qui alimente le lot de `src` (2 ou 3)
+    fax = 5 - m                     # l'axe d'instance spectateur : 2↔3
     nb_d, nb_s = size(dest, 1), size(src, 1)
-    nfix = M == 2 ? size(src, 3) : size(src, 2)
     tile = Matrix{T}(undef, P, P)
     npd, nps = cld(nb_d, P), cld(nb_s, P)
-    @inbounds for f in 1:nfix, qs in 0:nps-1, qd in 0:npd-1
+    @inbounds for f in 1:size(dest, fax), qs in 0:nps-1, qd in 0:npd-1
         pd_hi = min(P, nb_d - qd * P)
         ps_hi = min(P, nb_s - qs * P)
         for pd in 1:pd_hi
+            j1 = qd * P + pd
             @simd for ps in 1:ps_hi
-                tile[pd, ps] = M == 2 ? s[ps, qd * P + pd, f, qs + 1] :
-                                        s[ps, f, qd * P + pd, qs + 1]
+                J = ntuple(k -> k == 1 ? j1 : (k == m ? qs * P + ps : f), Val(3))
+                tile[pd, ps] = s[ps, J[IP[2]], J[IP[3]], qs + 1]
             end
         end
         for ps in 1:ps_hi
+            jm = qs * P + ps
             @simd for pd in 1:pd_hi
-                if M == 2
-                    d[pd, qs * P + ps, f, qd + 1] = tile[pd, ps]
-                else
-                    d[pd, f, qs * P + ps, qd + 1] = tile[pd, ps]
-                end
+                d[pd, m == 2 ? jm : f, m == 2 ? f : jm, qd + 1] = tile[pd, ps]
             end
         end
     end
@@ -101,19 +103,27 @@ function Base.permutedims!(dest::Array{T,N,P}, src::Array{T,N,P},
 
     if perm[1] == 1
         return _permute_instance!(dest, src, perm)
-    elseif N == 3 && (Tuple(perm) === (2, 1, 3) || Tuple(perm) === (3, 2, 1))
-        # Transposition pure des axes 1 et m, le troisième restant en place : le cas ADI.
-        return _swap_batch!(dest, src, Val(Int(perm[1])))
+    elseif N == 3
+        # Le lot change d'axe. Les quatre permutations possibles sont couvertes.
+        return _swap_batch!(dest, src, Val(Tuple(invperm(collect(perm)))))
     end
     _generic_permutedims!(dest, src, perm)
 end
 
 # Le repli : correct pour toute permutation, simplement plus lent. On le garde explicite
 # plutôt que d'appeler `invoke`, pour que le chemin lent soit lisible et testable.
+#
+# ⚠️ La convention de Base est `dest[J] == src[J[invperm(perm)]]`, avec
+# `size(dest) == size(src)[perm]`. Une première version utilisait `perm` au lieu de son
+# inverse : pour une TRANSPOSITION les deux coïncident, donc c'était juste par accident, et
+# les trois cas testés — (2,1,3), (3,2,1), (1,3,2) — étaient tous des involutions. Le bug
+# n'apparaissait que sur un 3-cycle, c'est-à-dire exactement la permutation qu'un cycle ADI
+# complet rend inévitable (voir la note de parité ci-dessous).
 function _generic_permutedims!(dest::Array{T,N}, src::Array{T,N}, perm) where {T,N}
+    ip = invperm(collect(perm))
     @inbounds for J in CartesianIndices(dest)
         t = Tuple(J)
-        dest[t...] = src[ntuple(k -> t[perm[k]], Val(N))...]
+        dest[t...] = src[ntuple(k -> t[ip[k]], Val(N))...]
     end
     dest
 end

@@ -97,35 +97,65 @@ Two regimes matter, and the cheaper one is easy to miss:
 If both remaining grid axes are independent, prefer the permutation that keeps the batch axis
 in place.
 
-## 5. What repacking actually costs
+## 5. The three transitions are not equivalent
 
-Measured on a 128×128×64 grid, `P = 8`, one core of an M1 Max:
+A full cycle needs three repacks, and they cost very differently. With the layouts above —
+`X = (y,x,z)`, `Y = (x,y,z)`, `Z = (x,z,y)` — on a 128×128×64 grid, `P = 8`:
+
+| transition | `perm` | batch axis | shape | time |
+|---|---|---|---|---:|
+| X → Y | `(2,1,3)` | moves | transposition | 0.48 ms |
+| Y → Z | `(1,3,2)` | **stays** | instance-only | **0.15 ms** |
+| Z → X | `(3,1,2)` | moves | **3-cycle** | 0.86 ms |
+
+A factor of **5.7 between the cheapest and the dearest**. The batch axis is what decides: when
+it stays put, no lane crosses a packet and the whole thing is a `permutedims!` on the packed
+storage.
+
+!!! note "One expensive transition is unavoidable, by parity"
+    It is tempting to look for layouts where every transition is cheap. There are none, and
+    the reason is group theory rather than engineering.
+
+    The three permutations of a closed cycle compose to the identity, which is **even**. A
+    transposition is **odd**. Three odd permutations compose to an odd one, so they cannot all
+    be transpositions: at least one must be even — a 3-cycle.
+
+    You can also show that at most *one* transition can keep the batch axis fixed. Writing
+    `b(r)` for the batch axis chosen for the sweep along `r`, `b(x) = b(y)` forces both to be
+    `z`, and then `b(z)` — which cannot be `z` — differs from both.
+
+    So the best a 3-D ADI cycle can do is exactly the table above: **one batch-fixed, one
+    transposition, one 3-cycle**. The layout choice above already achieves it.
+
+## 6. What repacking costs over a whole cycle
+
+Same grid, same machine, one full cycle: three sweeps and three repacks.
 
 | | time | in Thomas sweeps |
 |---|---:|---:|
-| one line-solve sweep | 1.71 ms | 1.00 |
-| repack, generic fallback | 2.13 ms | 1.25 |
-| **repack, specialised** | **0.47 ms** | **0.27** |
-| `permutedims!` on an equivalent `Base.Array` | 0.40 ms | 0.23 |
+| one line-solve sweep | 1.66 ms | 1.00 |
+| the three repacks, generic fallback | 10.22 ms | 6.2 |
+| **the three repacks, specialised** | **1.52 ms** | **0.9** |
 
-The last row is the floor: the same bytes moved, with no packets involved. The specialised
-path lands 18% above it, so there is little left to win on this operation.
-
-For a full ADI stage — three sweeps and two repacks:
-
-| | stage | share spent repacking |
+| | cycle | share spent repacking |
 |---|---:|---:|
-| generic fallback | 9.39 ms | **45%** |
-| specialised | 6.06 ms | 15% |
+| generic fallback | 15.19 ms | **67%** |
+| specialised | 6.48 ms | 23% |
 
-Repacking was quietly consuming nearly half the stage and is now a sixth of it, a **35%
-improvement on the whole stage** for a change no kernel sees.
+Repacking was consuming two thirds of the cycle and is now under a quarter — a **57%
+improvement on the whole cycle**, for a change no kernel sees. The generic path is especially
+bad on the 3-cycle, which is exactly the transition no layout choice can avoid.
+
+For a single transposition the specialised path is 0.47 ms against a 0.40 ms floor, the floor
+being `permutedims!` on an equivalent `Base.Array` — the same bytes moved, no packets
+involved. There is little left to win there; the remaining headroom is in the 3-cycle.
 
 !!! tip "Is it worth fusing the transpose into the solve?"
     A natural next idea is to skip the separate pass entirely: read from the previous layout
     and write straight into the next one. The table above bounds what that could buy. Even a
-    *perfect* fusion, with the repack costing literally nothing, would take 6.06 ms to 5.13 ms
-    — **15% more**.
+    *perfect* fusion, with the repack costing literally nothing, would take the cycle from
+    6.48 ms to 4.97 ms — **23% more**, against the 57% the specialised repack already
+    captured.
 
     And that bound is optimistic. Fusing means the sweep reads or writes across the packed
     axis, so the contiguous packet loads that make DLI fast become strided, and the sweep
