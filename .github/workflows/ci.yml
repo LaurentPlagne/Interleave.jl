@@ -3,6 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+    # Documenter builds a versioned documentation directory from the tag name.
+    # Without this trigger, only `dev` is ever published.
+    tags: ['*']
   pull_request:
   workflow_dispatch:
 
@@ -32,16 +35,40 @@ jobs:
         env:
           JULIA_NUM_THREADS: 2
         run: julia --project=. -e 'using Pkg; Pkg.test(; coverage=true)'
+      # Coverage was already being collected above, but never left the runner.
+      # One matrix cell is enough: the others would only add duplicate reports.
+      - uses: julia-actions/julia-processcoverage@v1
+        if: matrix.os == 'ubuntu-latest' && matrix.julia-version == '1.11'
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.julia-version == '1.11'
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Coverage reporting must never turn a green test run red.
+          fail_ci_if_error: false
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest
+    # `deploydocs` pushes the rendered site to the gh-pages branch, which needs write
+    # access. Without this block the build ran and the deployment silently did nothing.
+    permissions:
+      contents: write
+      statuses: write
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.11'
       - uses: julia-actions/cache@v2
-      - name: Build documentation
+      - name: Build and deploy documentation
         run: julia --project=docs -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
         env:
           JULIA_DEBUG: Documenter
+          # DOCUMENTER_KEY (an SSH deploy key from DocumenterTools.genkeys) is preferred:
+          # a gh-pages push made with GITHUB_TOKEN does not trigger the Pages build job.
+          # GITHUB_TOKEN is the fallback so the deployment still works before the key
+          # is configured.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
