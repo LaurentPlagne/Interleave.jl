@@ -49,7 +49,7 @@ function run(; nchan = 512, H = 64, W = 64, rounds = 5)
     flops = 17 * nchan * (H - 2) * (W - 2)     # 9 mul + 8 add par pixel
     # Type de vue obtenu par `typeof` sur une instance réelle : le reconstruire à la
     # main est une source d'erreur (paramètre de contiguïté notamment).
-    viewtype(s) = typeof(instance(s[1], 1))
+    viewtype(s) = typeof(packet(s[1], 1))
     extras = Dict("P=$P" => (P == 1 ? "—" :
                   string(vectorised(depthwise3x3!, Tuple{viewtype(s),viewtype(s),NTuple{9,T}}, P)))
                   for (P, s) in zip(PACKS, sets))

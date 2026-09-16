@@ -85,7 +85,7 @@ end
 
 # ---------------------------------------------------------------------------------
 # Instances 2D : le lot porte des cartes (H, W), pas des vecteurs.
-# `instance(A, k)` rend alors une vue 2D — le noyau s'écrit en indices (i, j).
+# `packet(A, k)` rend alors une vue 2D — le noyau s'écrit en indices (i, j).
 # Parcours colonne-major (i contigu à l'intérieur), contrairement au C++ qui aplatit
 # en row-major : c'est le même calcul, dans l'ordre que veut Julia.
 

@@ -21,6 +21,21 @@ function gpu_synchronize(A)
 end
 
 """
+    gpu_scratchlike(A) -> device array
+
+Batch-major workspace for [`gpu_apply!`](@ref): one private row per work item, on the same
+backend as `A`. Available once a KernelAbstractions backend is loaded.
+
+This is deliberately **not** the same function as [`scratchlike`](@ref), which returns one
+instance of CPU workspace for [`apply!`](@ref). The two shapes are different and are not
+interchangeable; separate names make a mix-up impossible to write by accident.
+"""
+function gpu_scratchlike(A)
+    throw(ArgumentError(
+        "no GPU backend is loaded; load Metal.jl or another KernelAbstractions backend"))
+end
+
+"""
     gpu_apply!(f, arrays...; scratch=nothing, workgroupsize=256, wait=false)
 
 Submit one GPU work item per independent problem. Every array uses the ordinary logical
@@ -32,7 +47,8 @@ The work item receives allocation-free `AbstractArray` views of one problem and 
 sequential. GPU SIMT execution across problems replaces the CPU's `Vec{P,T}` element
 type, so there is no packet size `P` on this path.
 
-If `scratch` is needed, pass a *batched device array*, commonly `similar(first(arrays))`.
+If `scratch` is needed, pass a *batched device array*, obtained with
+[`gpu_scratchlike`](@ref).
 Each work item sees only its own slice. Interleave allocates no device or scratch buffer;
 the backend may still allocate compiler and launch bookkeeping on the host.
 

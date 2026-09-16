@@ -24,8 +24,9 @@ using OhMyThreads: tforeach, index_chunks, SerialScheduler, StaticScheduler,
 
 # `Array` n'est PAS exporté : il porte le même nom que `Base.Array` et s'écrit
 # `Interleave.Array`, exactement comme `Interleave::Array` en C++.
-export instance, packs, apply!, parallel_apply!,
-       gpu_apply!, gpu_backend, gpu_synchronize,
+export packet, instance, packs, scratchlike, tune,
+       apply!, parallel_apply!,
+       gpu_apply!, gpu_backend, gpu_synchronize, gpu_scratchlike,
        packsize, npacks, instance_size, npadding, lanetype, packtype
 # Réexportés par commodité : ce sont les schedulers attendus par `parallel_apply!`.
 export SerialScheduler, StaticScheduler, DynamicScheduler, GreedyScheduler
@@ -33,6 +34,7 @@ export Vec
 
 include("array.jl")
 include("apply.jl")
+include("tune.jl")
 include("gpu.jl")
 
 end # module

@@ -75,11 +75,11 @@ function run(; nsys = 65_536, nx = 64, rounds = 5)
             () -> (copyto!(s[1], s0[1]); fill!(b(), zero(eltype(b()))))
         end)
         push!(variants, "P=$P threadé" => let s = s, P = P
-            sc = similar(instance(s[1], 1))
+            sc = scratchlike(s[1])
             () -> parallel_apply!(thomas!, s...; scratch = sc, scheduler = StaticScheduler())
         end)
         push!(resets, let s = s, s0 = deepcopy(s)
-            sc = similar(instance(s[1], 1))
+            sc = scratchlike(s[1])
             () -> (copyto!(s[1], s0[1]); fill!(sc, zero(eltype(sc))))
         end)
     end

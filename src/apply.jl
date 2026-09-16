@@ -15,14 +15,14 @@
 @inline _apply(f::F, views::NTuple{NA,Any}, ::Nothing) where {F,NA} = f(views...)
 @inline _apply(f::F, views::NTuple{NA,Any}, scratch) where {F,NA} = f(views..., scratch)
 
-"""Build the fixed-arity tuple of instance views without a closure allocation."""
-@generated function _instances(arrays::NTuple{NA,Any}, k) where {NA}
-    Expr(:tuple, [:(instance(arrays[$i], k)) for i in 1:NA]...)
+"""Build the fixed-arity tuple of packet views without a closure allocation."""
+@generated function _packets(arrays::NTuple{NA,Any}, k) where {NA}
+    Expr(:tuple, [:(packet(arrays[$i], k)) for i in 1:NA]...)
 end
 
 function _runpacks!(f::F, ks, arrays::NTuple{NA,Any}, scratch) where {F,NA}
     for k in ks
-        _apply(f, _instances(arrays, k), scratch)
+        _apply(f, _packets(arrays, k), scratch)
     end
     nothing
 end
@@ -49,6 +49,75 @@ function _checked_npacks(arrays::NTuple{NA,Any}) where NA
     npacks(A)
 end
 
+# Sans cette vérification, un noyau appelé avec la mauvaise arité produit une `MethodError`
+# dont la signature est illisible : cinq `SubArray{Vec{8,Float32},1,Matrix{Vec{8,Float32}},
+# Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}` alignés, et la vraie cause — « il manque
+# le scratch » — n'apparaît que dans un `!Matched::Any` en fin de liste. `applicable` coûte
+# un appel par `apply!`, jamais par paquet, donc le chemin chaud est intact.
+# `nameof(typeof(f))` rend le nom mangle (`#thomas!`) ; `nameof(f)` rend `thomas!`, mais
+# n'existe que pour une `Function` — un type appelable passe par son type.
+_kernel_name(f::Function) = string(nameof(f))
+_kernel_name(f) = string(nameof(typeof(f)))
+
+@noinline function _kernel_arity_error(f, arrays::NTuple{NA,Any}, scratch) where {NA}
+    views = _packets(arrays, 1)
+    name = _kernel_name(f)
+    plural = NA == 1 ? "" : "s"
+    if scratch === nothing
+        # Le noyau accepterait-il un argument de plus ? C'est le cas le plus fréquent.
+        if applicable(f, views..., scratchlike(first(arrays)))
+            throw(ArgumentError(
+                "kernel `$name` cannot be called with $NA packet view$plural and no " *
+                "workspace, but it accepts one more argument. It most likely needs a " *
+                "scratch buffer:\n" *
+                "    apply!($name, arrays...; scratch = scratchlike(first_array))"))
+        end
+    else
+        # Symétrique : un scratch passé à un noyau qui n'en veut pas.
+        if applicable(f, views...)
+            throw(ArgumentError(
+                "kernel `$name` takes $NA packet view$plural and no workspace, but a " *
+                "`scratch` argument was supplied. Drop the `scratch` keyword."))
+        end
+    end
+    throw(ArgumentError(
+        "kernel `$name` cannot be called on this batch. It is invoked with $NA packet " *
+        "view$plural of element type $(eltype(first(views)))" *
+        (scratch === nothing ? "" : " plus a workspace of element type $(eltype(scratch))") *
+        ".\nA kernel must accept one view per array passed to the driver, in the same " *
+        "order, and the workspace last when `scratch` is given."))
+end
+
+@inline function _check_kernel(f::F, arrays::NTuple{NA,Any}, scratch) where {F,NA}
+    npacks(first(arrays)) == 0 && return nothing
+    views = _packets(arrays, 1)
+    ok = scratch === nothing ? applicable(f, views...) : applicable(f, views..., scratch)
+    ok || _kernel_arity_error(f, arrays, scratch)
+    nothing
+end
+
+# Le scratch CPU a la taille d'**une** instance ; le scratch GPU est un lot batch-major.
+# Les confondre est l'erreur documentée dans docs/src/manual/review.md, et elle produisait
+# jusqu'ici un `convert` illisible venu d'un paquet sans rapport.
+@noinline function _scratch_shape_error(arrays::NTuple{NA,Any}, scratch) where {NA}
+    A = first(arrays)
+    throw(DimensionMismatch(
+        "scratch has size $(size(scratch)), but `apply!` expects one instance of " *
+        "workspace, of size $(instance_size(A)).\n" *
+        "It looks like a batch-major buffer, which is what `gpu_apply!` wants. " *
+        "For the CPU driver use `scratch = scratchlike(A)`."))
+end
+
+@inline function _check_scratch(arrays::NTuple{NA,Any}, scratch) where {NA}
+    scratch isa AbstractArray || return nothing
+    A = first(arrays)
+    size(scratch) == instance_size(A) && return nothing
+    # Seul le cas franchement batch-major est refusé ; un scratch plus grand reste permis.
+    ndims(scratch) == ndims(A) && size(scratch, 1) == size(A, 1) &&
+        _scratch_shape_error(arrays, scratch)
+    nothing
+end
+
 """
     apply!(f, arrays...; scratch = nothing)
 
@@ -59,28 +128,32 @@ Both [`Interleave.Array`](@ref) and ordinary `Base.Array` batches are accepted. 
 array, the first dimension is the batch and each packet contains one lane, which makes it a
 convenient development and reference path.
 
-`f` receives one instance view per array. Packed instances are dense; the reference
-`Base.Array` view may be strided because the batch is its first dimension. If `scratch` is
-supplied, it is appended as the last argument.
+`f` receives one **packet** view per array (see [`packet`](@ref)). Packed views are dense; the
+reference `Base.Array` view may be strided because the batch is its first dimension. If
+`scratch` is supplied, it is appended as the last argument.
 
 !!! warning "Never launches tasks"
     `apply!` cannot parallelize: it has no scheduler or chunk-count keyword. Use
     [`parallel_apply!`](@ref) when task creation should be explicit at the call site.
 
-- `scratch`: an array prototype copied with `similar`, commonly
-  `similar(instance(X, 1))`. A zero-argument callable is also accepted for custom
-  construction. Scratch storage is never allocated inside the kernel.
+- `scratch`: **one instance** of workspace, obtained with [`scratchlike`](@ref). It is copied
+  with `similar`, so a zero-argument callable is also accepted for custom construction.
+  Scratch storage is never allocated inside the kernel. This is *not* the batch-major buffer
+  that [`gpu_apply!`](@ref) expects; passing one is rejected with an explicit message.
 
 Return the first array.
 
 # Example
 ```julia
-apply!(thomas!, X, D, U, L, B; scratch = similar(instance(X, 1)))
+apply!(thomas!, X, D, U, L, B; scratch = scratchlike(X))
 ```
 """
 function apply!(f::F, arrays::Vararg{AbstractArray,NA}; scratch = nothing) where {F,NA}
     npk = _checked_npacks(arrays)
-    _runpacks!(f, 1:npk, arrays, _newscratch(scratch))
+    _check_scratch(arrays, scratch)
+    sc = _newscratch(scratch)
+    _check_kernel(f, arrays, sc)
+    _runpacks!(f, 1:npk, arrays, sc)
     first(arrays)
 end
 
@@ -94,8 +167,9 @@ visible.
 - `scheduler`: an OhMyThreads scheduler (`StaticScheduler`, `DynamicScheduler`,
   `GreedyScheduler`, or `SerialScheduler`). Use `chunking=false` when exactly one task per
   chunk is required.
-- `scratch`: an array prototype copied with `similar` **once per chunk**, so every task owns
-  its mutable workspace. Sharing one scratch object between tasks creates a race.
+- `scratch`: an instance-sized prototype from [`scratchlike`](@ref), copied with `similar`
+  **once per chunk**, so every task owns its mutable workspace. Sharing one scratch object
+  between tasks creates a race.
 - `nchunks`: packet-partition granularity.
 
 Return the first array.
@@ -105,6 +179,8 @@ function parallel_apply!(f::F, arrays::Vararg{AbstractArray,NA};
                    scheduler = StaticScheduler(),
                    nchunks::Int = 4 * Threads.nthreads()) where {F,NA}
     npk = _checked_npacks(arrays)
+    _check_scratch(arrays, scratch)
+    _check_kernel(f, arrays, _newscratch(scratch))
     if scheduler isa SerialScheduler
         _runpacks!(f, 1:npk, arrays, _newscratch(scratch))
     else

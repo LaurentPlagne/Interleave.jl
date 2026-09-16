@@ -37,12 +37,12 @@ function run(; nopt = 16_384, ngrid = 64, nt = 32, rounds = 5)
             () -> (copyto!(s[1], s0[1]); copyto!(s[5], s0[5]); fill!(b(), zero(eltype(b()))))
         end)
         push!(variants, "P=$P threadé" => let s = s
-            sc = similar(instance(s[1], 1))
+            sc = scratchlike(s[1])
             () -> parallel_apply!((v, d, u, l, r, w) -> blackscholes_cn!(v, d, u, l, r, w, nt),
                             s...; scratch = sc, scheduler = StaticScheduler())
         end)
         push!(resets, let s = s, s0 = deepcopy(s)
-            sc = similar(instance(s[1], 1))
+            sc = scratchlike(s[1])
             () -> (copyto!(s[1], s0[1]); copyto!(s[5], s0[5]); fill!(sc, zero(eltype(sc))))
         end)
     end

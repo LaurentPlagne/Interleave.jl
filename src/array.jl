@@ -263,14 +263,114 @@ Base.fill!(A::Array{T,N,P}, x) where {T,N,P} =
     (fill!(A.data, packtype(T, Val(P))(convert(T, x))); A)
 
 """
-    instance(A, k)
+    packet(A, k)
 
-View of the `k`th packet of problems: a dense `SubArray` with the shape of one instance and
-machine element type `Vec{P,T}` (or `T` for a standard array). This is what the kernel
+View of the `k`th **packet** of problems: a dense `SubArray` with the shape of one instance
+and machine element type `Vec{P,T}` (or `T` for a standard array). This is what a kernel
 receives; the driver owns batch traversal.
+
+`k` runs from 1 to [`npacks`](@ref), **not** to `size(A, 1)`. One packet holds
+[`packsize`](@ref) problems. For a single logical problem, use [`instance`](@ref).
 """
-@inline instance(A::Array{T,N}, k::Integer) where {T,N} =
+@inline function packet(A::Array{T,N}, k::Integer) where {T,N}
+    @boundscheck _checkpacket(A, k)
     view(A.data, ntuple(_ -> Colon(), Val(N - 1))..., k)
+end
+
+# Le message par défaut d'un `BoundsError` sur `A.data` parle de la représentation interne
+# (« 16×13 Matrix{Vec{8, Float32}} »), que l'utilisateur n'a jamais vue : il raisonne sur un
+# lot de 100 problèmes. Un type dédié permet d'expliquer d'où vient la borne — et évite
+# d'ajouter une méthode `showerror` à `BoundsError`, qui serait de la piraterie de type.
+"""
+    Interleave.PacketBoundsError
+
+Raised when a packet index falls outside `1:npacks(A)`. The message states where the bound
+comes from, because `npacks` is derived from the batch size and `P` rather than given.
+"""
+struct PacketBoundsError <: Exception
+    nbatch::Int
+    packsize::Int
+    npacks::Int
+    k::Int
+end
+
+function Base.showerror(io::IO, e::PacketBoundsError)
+    print(io, "PacketBoundsError: packet index ", e.k, " is out of range.\n",
+          "This batch holds ", e.nbatch, " problems in packets of ", e.packsize,
+          ", so it has npacks = ", e.npacks, " packets.\n",
+          "Packet indices run 1:", e.npacks, " and go through `packet`; ",
+          "problem indices run 1:", e.nbatch, " and go through `instance`.")
+end
+
+@noinline _packet_bounds_error(A, k) =
+    throw(PacketBoundsError(size(A, 1), packsize(A), npacks(A), Int(k)))
+
+@inline function _checkpacket(A, k)
+    1 <= k <= npacks(A) || _packet_bounds_error(A, k)
+    nothing
+end
+
+"""
+    instance(A, b)
+
+View of the `b`th individual **problem**, with scalar element type `T` and the shape of one
+instance. `b` runs from 1 to `size(A, 1)`.
+
+This is the honest counterpart of [`packet`](@ref): it always denotes exactly one problem,
+whatever the storage. On an interleaved array it reads one lane out of each packet, so it is
+a debugging, comparison, and I/O tool rather than a hot path. Kernels receive packets.
+
+```julia
+A = Interleave.Array{Float32,2,8}(undef, 100, 16)
+size(packet(A, 1))     # (16,) — holds 8 problems, k runs 1:13
+size(instance(A, 1))   # (16,) — holds 1 problem,  b runs 1:100
+```
+"""
+@inline function instance(A::Array{T,N,P}, b::Integer) where {T,N,P}
+    @boundscheck 1 <= b <= A.nbatch ||
+        throw(BoundsError(A, (b, ntuple(_ -> Colon(), Val(N - 1))...)))
+    k, p = divrem(Int(b) - 1, P)
+    Instance{T,N - 1,typeof(A.flat)}(A.flat, p + 1, k + 1, instance_size(A))
+end
+
+"""Scalar view of one problem inside the packed storage: lane `lane` of packet `pack`."""
+struct Instance{T,N,A} <: AbstractArray{T,N}
+    flat::A
+    lane::Int
+    pack::Int
+    dims::NTuple{N,Int}
+end
+
+Base.size(v::Instance) = v.dims
+Base.IndexStyle(::Type{<:Instance}) = IndexCartesian()
+
+Base.@propagate_inbounds function Base.getindex(v::Instance{T,N},
+                                                I::Vararg{Int,N}) where {T,N}
+    v.flat[v.lane, I..., v.pack]
+end
+
+Base.@propagate_inbounds function Base.setindex!(v::Instance{T,N}, x,
+                                                 I::Vararg{Int,N}) where {T,N}
+    v.flat[v.lane, I..., v.pack] = x
+end
+
+"""
+    scratchlike(A) -> Array
+
+Workspace prototype for one instance of batch `A`, ready to pass as the `scratch` keyword of
+[`apply!`](@ref) and [`parallel_apply!`](@ref).
+
+It replaces the cryptic `similar(packet(A, 1))` idiom and is correct for an empty batch,
+where no packet exists to copy.
+
+!!! warning "CPU and GPU scratch are different objects"
+    `apply!` wants **one instance** of workspace, which this returns. `gpu_apply!` wants a
+    **batch-major device array**, one private row per work item — use `gpu_scratchlike(A)`
+    from the KernelAbstractions extension. The two are not interchangeable, and the drivers
+    reject the wrong one with an explicit message.
+"""
+scratchlike(A::Array{T,N,P}) where {T,N,P} =
+    Base.Array{packtype(T, Val(P))}(undef, instance_size(A))
 
 # ---------------------------------------------------------------------------------
 # Tableaux standard
@@ -291,8 +391,16 @@ instance_size(A::AbstractArray) = Base.tail(size(A))
 npadding(::AbstractArray) = 0
 packtype(A::AbstractArray) = eltype(A)
 
-@inline instance(A::AbstractArray{T,N}, k::Integer) where {T,N} =
+# Sur un tableau standard `P == 1`, donc le paquet `k` **est** le problème `k` : les deux
+# fonctions coïncident, et c'est exactement ce qui rend le chemin scalaire interchangeable
+# avec le chemin paqueté. C'est sur un `Interleave.Array` qu'elles divergent.
+@inline packet(A::AbstractArray{T,N}, k::Integer) where {T,N} =
     view(A, k, ntuple(_ -> Colon(), Val(N - 1))...)
+
+@inline instance(A::AbstractArray{T,N}, b::Integer) where {T,N} =
+    view(A, b, ntuple(_ -> Colon(), Val(N - 1))...)
+
+scratchlike(A::AbstractArray) = Base.Array{eltype(A)}(undef, instance_size(A))
 
 # ---------------------------------------------------------------------------------
 # Itérateur de paquets
@@ -327,13 +435,13 @@ function packs(A::AT) where {AT<:AbstractArray}
     # Le type de la vue d'instance ne dépend que du type de `A`, pas de sa taille.
     # `promote_op` l'obtient sans indexer un hypothétique premier paquet, ce qui rend
     # les lots vides valides tout en conservant un `Packs` entièrement concret.
-    V = Base.promote_op(instance, AT, Int)
+    V = Base.promote_op(packet, AT, Int)
     Packs{AT,V}(A, npacks(A))
 end
 
 Base.size(p::Packs) = (p.n,)
 Base.IndexStyle(::Type{<:Packs}) = IndexLinear()
-Base.@propagate_inbounds Base.getindex(p::Packs, k::Int) = instance(p.array, k)
+Base.@propagate_inbounds Base.getindex(p::Packs, k::Int) = packet(p.array, k)
 
 function Base.foreach(f::F, a::Packs, rest::Vararg{Packs,NR}) where {F,NR}
     n = length(a)

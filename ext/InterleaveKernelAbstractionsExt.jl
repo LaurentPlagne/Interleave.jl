@@ -1,7 +1,7 @@
 module InterleaveKernelAbstractionsExt
 
 using Interleave
-import Interleave: gpu_apply!, gpu_backend, gpu_synchronize
+import Interleave: gpu_apply!, gpu_backend, gpu_synchronize, gpu_scratchlike
 import KernelAbstractions
 using KernelAbstractions: @index, @kernel
 
@@ -49,6 +49,12 @@ end
 end
 
 @inline gpu_backend(A::AbstractArray) = KernelAbstractions.get_backend(A)
+
+# Le pendant GPU de `scratchlike`. Volontairement un **autre nom** plutôt qu'une méthode de
+# `scratchlike` : les deux objets ne sont pas interchangeables, et un nom distinct empêche de
+# passer l'un là où l'autre est attendu sans s'en apercevoir. Ici le workspace est un lot
+# batch-major complet, dont chaque work item ne voit que sa propre tranche.
+gpu_scratchlike(A::AbstractArray) = similar(A)
 
 function gpu_synchronize(A::AbstractArray)
     KernelAbstractions.synchronize(gpu_backend(A))

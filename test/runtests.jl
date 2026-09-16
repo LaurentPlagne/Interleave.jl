@@ -148,7 +148,7 @@ end
     @testset "Thomas — invariant inverse (résidu)" begin
         nbatch, nx = 61, 32                       # 61 non multiple de 8 : padding actif
         X, D, U, L, B = thomas_setup(nbatch, nx)
-        apply!(thomas!, X, D, U, L, B; scratch = similar(instance(X, 1)))
+        apply!(thomas!, X, D, U, L, B; scratch = scratchlike(X))
         R = Interleave.Array{T}(undef, nbatch, nx; pack = Val(P))
         fill!(R, 0)
         apply!(tridiag_mul!, R, D, U, L, X)    # on remultiplie : T*x doit redonner b
@@ -163,7 +163,7 @@ end
         # qui valide le layout, le driver et le padding d'un seul coup.
         nbatch, nx = 61, 32
         X, D, U, L, B = thomas_setup(nbatch, nx)
-        apply!(thomas!, X, D, U, L, B; scratch = similar(instance(X, 1)))
+        apply!(thomas!, X, D, U, L, B; scratch = scratchlike(X))
         lx, lb = X, B
         for b in 1:nbatch
             xs = zeros(T, nx); ds = fill(T(2), nx); us = fill(T(-1), nx)
@@ -203,7 +203,7 @@ end
         ref = nothing
         for pk in (Val(1), Val(2), Val(4), Val(8), Val(16), Val(32))
             X, D, U, L, B = thomas_setup(nbatch, nx; pack = pk)
-            apply!(thomas!, X, D, U, L, B; scratch = similar(instance(X, 1)))
+            apply!(thomas!, X, D, U, L, B; scratch = scratchlike(X))
             got = [X[b, i] for b in 1:nbatch, i in 1:nx]
             ref === nothing ? (ref = got) : @test(got == ref)   # égalité exacte
         end
@@ -211,10 +211,10 @@ end
 
     @testset "stabilité de type" begin
         X, D, U, L, B = thomas_setup(16, 8)
-        @test @inferred(instance(X, 1)) isa SubArray
+        @test @inferred(packet(X, 1)) isa SubArray
         @test @inferred(X[3, 4]) isa T
         @test @inferred(packsize(X)) == P
-        @test @inferred(apply!(thomas!, X, D, U, L, B; scratch = similar(instance(X, 1)))) isa Interleave.Array
+        @test @inferred(apply!(thomas!, X, D, U, L, B; scratch = scratchlike(X))) isa Interleave.Array
     end
 
     @testset "le driver n'alloue pas" begin
@@ -235,13 +235,13 @@ end
         # séquentiel ET reproductibilité sur plusieurs exécutions (guide §9).
         nbatch, nx = 1001, 32
         Xs, D, U, L, B = thomas_setup(nbatch, nx)
-        apply!(thomas!, Xs, D, U, L, B; scratch = similar(instance(Xs, 1)))
+        apply!(thomas!, Xs, D, U, L, B; scratch = scratchlike(Xs))
         seq = [Xs[b, i] for b in 1:nbatch, i in 1:nx]
         for sched in (StaticScheduler(), DynamicScheduler(), StaticScheduler(chunking = false))
             for _ in 1:3
                 Xp, Dp, Up, Lp, Bp = thomas_setup(nbatch, nx)
                 parallel_apply!(thomas!, Xp, Dp, Up, Lp, Bp;
-                          scratch = similar(instance(Xp, 1)), scheduler = sched)
+                          scratch = scratchlike(Xp), scheduler = sched)
                 @test [Xp[b, i] for b in 1:nbatch, i in 1:nx] == seq
             end
         end
@@ -261,7 +261,7 @@ end
         @test packtype(A1) === T && packtype(A8) === Vec{8,T}
         @test parent(A1) isa Matrix{T}
         @test packsize(A1) == 1 && npacks(A1) == 10
-        @test instance(A1, 3) isa SubArray{T,1}
+        @test packet(A1, 3) isa SubArray{T,1}
     end
 
     @testset "un lot est un tableau de scalaires" begin
@@ -375,7 +375,7 @@ end
         end
         payoff = [lv[b, i] for b in 1:nopt, i in 1:ngrid]
         apply!((v, d, u, l, r, s) -> blackscholes_cn!(v, d, u, l, r, s, nt),
-                  V, D, U, L, R; scratch = similar(instance(V, 1)))
+                  V, D, U, L, R; scratch = scratchlike(V))
         @test all(isfinite, V)
         # Bit-exactitude contre le même noyau en scalaire
         for b in (1, 8, 9, 61)
@@ -431,7 +431,7 @@ end
         B = deepcopy(A)
         B[1, 1] = T(7)
         @test B[1, 1] == T(7)
-        @test Interleave.instance(B, 1)[1][1] == T(7)
+        @test Interleave.packet(B, 1)[1][1] == T(7)
         @test A[1, 1] == T(1)
         @test pointer(B.flat) != pointer(A.flat)
     end
@@ -475,9 +475,114 @@ end
         Dr = deserialize(io2)
         Xr = similar(X)
         fill!(Xr, 0)
-        apply!(thomas!, X, D, U, L, Bv; scratch = similar(instance(X, 1)))
-        apply!(thomas!, Xr, Dr, U, L, Bv; scratch = similar(instance(Xr, 1)))
+        apply!(thomas!, X, D, U, L, Bv; scratch = scratchlike(X))
+        apply!(thomas!, Xr, Dr, U, L, Bv; scratch = scratchlike(Xr))
         @test Xr == X
+    end
+
+    @testset "packet et instance ne désignent pas la même chose" begin
+        # Le piège d'API que ce renommage corrige : sur un tableau entrelacé, `k` est un
+        # indice de PAQUET (1:npacks) alors que `b` est un indice de PROBLÈME (1:nbatch).
+        A = Interleave.Array{T,2,8}([T(10b + i) for b in 1:100, i in 1:16])
+        B = [T(10b + i) for b in 1:100, i in 1:16]
+
+        @test npacks(A) == 13 && packsize(A) == 8      # cld(100, 8)
+        @test npacks(B) == 100 && packsize(B) == 1
+
+        # Même forme apparente, contenus différents.
+        @test size(packet(A, 1)) == size(instance(A, 1)) == (16,)
+        @test eltype(packet(A, 1)) === Vec{8,T}        # 8 problèmes
+        @test eltype(instance(A, 1)) === T             # 1 problème
+
+        # `instance` est honnête : le problème b, quel que soit le stockage.
+        for b in (1, 8, 9, 57, 100)
+            @test collect(instance(A, b)) == collect(instance(B, b))
+        end
+        # et il est mutable, en écrivant bien dans le stockage paqueté.
+        instance(A, 9)[4] = T(-5)
+        @test A[9, 4] == T(-5)
+        @test parent(A)[4, 2][1] == T(-5)              # lot 9 = lane 1 du paquet 2
+
+        # Sur un tableau standard P=1, les deux coïncident : c'est ce qui rend le chemin
+        # scalaire interchangeable avec le chemin paqueté.
+        @test collect(packet(B, 7)) == collect(instance(B, 7))
+
+        # Bornes : le message doit parler de paquets, pas de la représentation interne.
+        @test_throws Interleave.PacketBoundsError packet(A, 14)
+        @test_throws Interleave.PacketBoundsError packet(A, 0)
+        msg = sprint(showerror, Interleave.PacketBoundsError(100, 8, 13, 50))
+        @test occursin("npacks = 13", msg)
+        @test occursin("1:100", msg)                   # la borne des problèmes est rappelée
+        @test_throws BoundsError instance(A, 101)
+    end
+
+    @testset "scratchlike" begin
+        A = Interleave.Array{T,2,8}(undef, 100, 16)
+        B = zeros(T, 100, 16)
+        @test size(scratchlike(A)) == instance_size(A) == (16,)
+        @test eltype(scratchlike(A)) === Vec{8,T}
+        @test size(scratchlike(B)) == (16,)
+        @test eltype(scratchlike(B)) === T
+        # Correct même sur un lot vide, où aucun paquet n'existe à copier.
+        E = Interleave.Array{T,2,8}(undef, 0, 16)
+        @test size(scratchlike(E)) == (16,)
+    end
+
+    @testset "diagnostics du driver" begin
+        nbatch, nx = 61, 32
+        X, D, U, L, Bv = thomas_setup(nbatch, nx)
+
+        # Scratch oublié : le message doit nommer la cause, pas empiler des SubArray.
+        err = try
+            apply!(thomas!, X, D, U, L, Bv)
+            nothing
+        catch e; e end
+        @test err isa ArgumentError
+        @test occursin("scratch", err.msg)
+        @test occursin("thomas!", err.msg)
+
+        # Scratch fourni à un noyau qui n'en veut pas.
+        R = similar(X)
+        err2 = try
+            apply!(tridiag_mul!, R, D, U, L, X; scratch = scratchlike(R))
+            nothing
+        catch e; e end
+        @test err2 isa ArgumentError
+        @test occursin("no workspace", err2.msg)
+
+        # Scratch batch-major passé au driver CPU : l'erreur qui se produisait pour de vrai.
+        err3 = try
+            apply!(thomas!, X, D, U, L, Bv; scratch = zeros(T, nbatch, nx))
+            nothing
+        catch e; e end
+        @test err3 isa DimensionMismatch
+        @test occursin("gpu_apply!", err3.msg)
+
+        # Les vérifications valent aussi pour le driver parallèle.
+        @test_throws ArgumentError parallel_apply!(thomas!, X, D, U, L, Bv)
+
+        # Un appel correct reste correct, et n'alloue toujours rien dans la boucle.
+        @test apply!(thomas!, X, D, U, L, Bv; scratch = scratchlike(X)) === X
+    end
+
+    @testset "tune choisit P par la mesure" begin
+        make(P) = thomas_setup(2_048, 32; pack = Val(P))
+        r = tune(thomas!, make; packs = (1, 4, 8), rounds = 2)
+
+        @test r isa Interleave.TuningResult
+        @test r.best in (1, 4, 8)
+        @test length(r.packs) == 3 && length(r.times) == 3
+        @test all(>(0), r.times)
+        @test r[4] == r.times[2]
+        @test r.times[argmin(r.times)] == r[r.best]
+        # Le tableau s'affiche sans erreur et nomme le gagnant.
+        out = sprint(show, MIME"text/plain"(), r)
+        @test occursin("best P = $(r.best)", out)
+
+        @test_throws ArgumentError tune(thomas!, make; packs = (3,))
+        @test_throws ArgumentError tune(thomas!, make; packs = ())
+        @test_throws ArgumentError tune(thomas!, make; rounds = 0)
+        @test_throws ArgumentError tune(thomas!, P -> "pas un tuple")
     end
 
     @testset "instances 3-D et au-delà" begin
@@ -485,7 +590,7 @@ end
         A = Interleave.Array{T}(undef, 20, 4, 5, 6; pack = Val(8))
         @test instance_size(A) == (4, 5, 6)
         @test size(A) == (20, 4, 5, 6)
-        @test size(instance(A, 1)) == (4, 5, 6)
+        @test size(packet(A, 1)) == (4, 5, 6)
         B4 = Interleave.Array{T}(undef, 20, 3, 4, 5, 6; pack = Val(4))
         @test instance_size(B4) == (3, 4, 5, 6)
         @test size(B4) == (20, 3, 4, 5, 6)
@@ -551,26 +656,26 @@ end
         @test instance_size(Xs) == (nx,)
         @test npadding(Xs) == 0
         @test packtype(Xs) === T
-        @test size(instance(Xs, 3)) == (nx,)
-        apply!(thomas!, Xs, Ds, Us, Ls, Bs; scratch = similar(instance(Xs, 1)))
+        @test size(packet(Xs, 3)) == (nx,)
+        apply!(thomas!, Xs, Ds, Us, Ls, Bs; scratch = scratchlike(Xs))
 
         leg(v) = (A = Interleave.Array{T}(undef, nb, nx; pack = Val(8)); fill!(A, v); A)
         Xl, Dl, Ul, Ll, Bl = leg(0), leg(2), leg(-1), leg(-1), leg(1)
-        apply!(thomas!, Xl, Dl, Ul, Ll, Bl; scratch = similar(instance(Xl, 1)))
+        apply!(thomas!, Xl, Dl, Ul, Ll, Bl; scratch = scratchlike(Xl))
 
         # Même noyau, même driver, deux dispositions mémoire : résultats bit-identiques.
         @test all(Xs[b, i] === Xl[b, i] for b in 1:nb, i in 1:nx)
 
         # Instances 2-D sur un tableau standard.
         Os, Is = zeros(T, 9, 6, 5), fill(T(1), 9, 6, 5)
-        @test size(instance(Is, 2)) == (6, 5)
+        @test size(packet(Is, 2)) == (6, 5)
         w = T.((1, 2, 1, 2, 4, 2, 1, 2, 1) ./ 16)
         apply!((o, i) -> depthwise3x3!(o, i, w), Os, Is)
         @test all(≈(1), Os[b, i, j] for b in 1:9, i in 2:5, j in 2:4)
 
         # Mélanger des dispositions incompatibles est refusé.
         @test_throws DimensionMismatch apply!(thomas!, Xs, Dl, Us, Ls, Bs;
-                                                 scratch = similar(instance(Xs, 1)))
+                                                 scratch = scratchlike(Xs))
     end
 
     @testset "driver GPU — contrat batch-major sur backend CPU" begin
@@ -644,8 +749,13 @@ end
         V = [max(T(i) - T(b) / 10, 0) for b in 1:nb, i in 1:ngrid]
         D = fill(T(2.05), nb, ngrid); U = fill(T(-0.5), nb, ngrid)
         L = fill(T(-0.5), nb, ngrid); R = zeros(T, nb, ngrid)
-        S = zeros(T, nb, ngrid); Vref = copy(V); Rref = copy(R); Sref = copy(S)
-        apply!(gpu_blackscholes_cn!, Vref, D, U, L, Rref; scratch = Sref)
+        # Les deux drivers ne veulent PAS le même workspace : `apply!` en veut un par
+        # instance, `gpu_apply!` un lot batch-major complet. Ce test passait auparavant un
+        # tampon batch-major au driver CPU ; il fonctionnait par accident, l'indexation
+        # linéaire du noyau n'en touchant que les `ngrid` premiers éléments. `_check_scratch`
+        # le refuse désormais.
+        S = zeros(T, nb, ngrid); Vref = copy(V); Rref = copy(R)
+        apply!(gpu_blackscholes_cn!, Vref, D, U, L, Rref; scratch = scratchlike(Vref))
         gpu_apply!(gpu_blackscholes_cn!, V, D, U, L, R; scratch = S, wait = true)
         @test V == Vref
 
@@ -706,7 +816,7 @@ end
         @test pX isa AbstractVector
         @test length(pX) == npacks(X)
         # `==` entre vues de Vec rendrait un Vec{8,Bool} : on compare les vues elles-mêmes.
-        @test pX[2] === instance(X, 2)
+        @test pX[2] === packet(X, 2)
 
         # `foreach` a exactement la bonne sémantique et rend `nothing`.
         buf = Vector{packtype(X)}(undef, nx)
@@ -716,7 +826,7 @@ end
 
         # …et le même résultat que le driver, au bit près.
         Y, Dy, Uy, Ly, By = thomas_setup(nb, nx)
-        apply!(thomas!, Y, Dy, Uy, Ly, By; scratch = similar(instance(Y, 1)))
+        apply!(thomas!, Y, Dy, Uy, Ly, By; scratch = scratchlike(Y))
         @test all(X[b, i] === Y[b, i] for b in 1:nb, i in 1:nx)
 
         # …sans allocation (la spécialisation de foreach évite le zip générique de Base).
@@ -734,7 +844,7 @@ end
         E = Interleave.Array{T}(undef, 0, 5; pack = Val(P))
         pE = @inferred packs(E)
         @test isempty(pE)
-        @test eltype(pE) === typeof(instance(X, 1))
+        @test eltype(pE) === typeof(packet(X, 1))
         called = Ref(false)
         @test foreach(_ -> (called[] = true), pE) === nothing
         @test !called[]
@@ -745,7 +855,7 @@ end
         ES = Matrix{T}(undef, 0, 5)
         pES = @inferred packs(ES)
         @test isempty(pES)
-        @test eltype(pES) === typeof(instance(S, 1))
+        @test eltype(pES) === typeof(packet(S, 1))
 
         @test_throws DimensionMismatch foreach((a, b) -> nothing, packs(X), packs(S))
     end
@@ -757,7 +867,7 @@ end
         function resoudre(Arr, nsys, nx)
             X, D, U, L, B = (Arr(undef, nsys, nx) for _ in 1:5)
             fill!(X, 0); fill!(D, 2); fill!(U, -1); fill!(L, -1); fill!(B, 1)
-            apply!(thomas!, X, D, U, L, B; scratch = similar(instance(X, 1)))
+            apply!(thomas!, X, D, U, L, B; scratch = scratchlike(X))
             X
         end
         ref = resoudre(Base.Array{T}, 61, 32)
