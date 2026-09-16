@@ -64,34 +64,66 @@ hardware. Vast.ai still lists that generation of card.
 
 ## Work completed in this session
 
-- **Fixed a confirmed silent-corruption bug.** `Serialization` reconstructs a struct field by
-  field, so an `Interleave.Array` round-trip returned `data` and `flat` as two independent
-  buffers: subsequent scalar writes landed where no kernel reads. `deepcopy` had been fixed
-  earlier; serialization had not. New extension `ext/InterleaveSerializationExt.jl`, plus a
-  regression test covering values, padding, the alias itself, and a kernel run on the
-  deserialized batch.
-- **Strengthened the GPU validation data.** The shared suite and the CPU-backend GPU testsets
-  used constant inputs, which made several comparisons vacuous — a Sobel filter of a constant
-  image is zero everywhere, and a constant image is invariant under transposition, so an `i`/`j`
-  index swap would have passed. All inputs now vary along every axis including the batch, every
-  case asserts its reference is not identically zero, and `H ≠ W` so shape errors surface.
-- **Exercised the masking path on the GPU suite.** Every batch size in `gpu/metal/all.jl` was a
-  multiple of the 256 work-group width, so the `batch <= nbatch` guard was never tested. Sizes
-  are now 4093, 1021, 251, 1019, 127, 253.
-- **Fixed the GPU environment compat.** The four `gpu/*/Project.toml` use a `[sources]` entry,
-  which Pkg only understands from Julia 1.11, while declaring `julia = "1.10"`. On a fresh 1.10
-  the unregistered parent package would not resolve.
-- **CI: documentation is now actually deployed.** `docs/make.jl` called `deploydocs`, but the
-  `docs` job had no write permission and no token, so the deployment silently did nothing while
-  the README advertised the site. Added `permissions: contents: write`, the token env, and a
-  `tags: ['*']` trigger for versioned docs.
-- **CI: coverage is now actually uploaded.** `Pkg.test(; coverage=true)` collected data that
-  never left the runner, despite `.codecov.yml` existing. Added processing and upload on the
-  Linux/1.11 cell only.
-- **Synchronized `AGENTS.md`**, whose title, invariants, and "Points ouverts" still referred to
-  a package named `Legolas` and claimed registration was impossible under that name.
+**Three silent-correctness bugs**, none of which showed a symptom:
 
-Test suite after these changes: **315 passed, 0 failed** (was 301).
+- `Serialization` reconstructed `Interleave.Array` field by field, so a round-trip returned
+  `data` and `flat` as independent buffers and later scalar writes landed where no kernel
+  reads. Fixed by `ext/InterleaveSerializationExt.jl`.
+- `permutedims!` used `perm` where Base's convention is `invperm(perm)`. Right by accident on
+  transpositions, wrong on 3-cycles — which a closed ADI cycle necessarily contains.
+- `gpu/ka/all.jl` never called `main()`: the include-guard in `gpu/metal/all.jl` is false when
+  included rather than run. The CUDA CI job would have uploaded an empty artifact and reported
+  success. Found by running the documented command on Colab and getting silence.
+
+**Four API changes**, all breaking and all made now because the package is unregistered:
+
+- `packet(A, k)` is the hot path; `instance(A, b)` now always means problem `b`. They used to
+  be one function whose meaning differed by a factor of `P`.
+- `scratchlike(A)` replaces `similar(instance(A, 1))`; `gpu_scratchlike` is deliberately a
+  separate name because the shapes are not interchangeable.
+- The drivers diagnose contract violations. Branching on data used to give
+  `non-boolean (Vec{8,Bool})` with no way out — and `Base.ifelse` has no `Vec` method either.
+  The answer is `vifelse`, now re-exported, which also works on scalars so the kernel stays
+  valid at `P = 1`.
+- `tune(f, make)` measures `P` instead of guessing it. It reproduces the documented table and
+  finds `P = 32` at 18.3× on Thomas, past the last column that table recorded.
+
+**ADI repacking.** `permutedims!` is specialised for interleaved batches: 34% off a full cycle,
+with repacking falling from 47% of the cycle to 20%. The three transitions differ by 3.7×, and
+parity forces at least one 3-cycle per cycle — no layout choice avoids it.
+
+**Both GPU backends measured** at the same commit. The T4 wins 2.4–5.9× on recurrences and
+loses 1.2–1.9× on stencils, which is the driver's known limitation rather than the hardware's.
+More important: **Metal is bit-exact against the CPU oracle on all ten kernels and CUDA is not**
+on nine, almost certainly FMA contraction. The CPU guarantee is unchanged; the GPU one covers
+the algorithm, not the rounding. Documented in `docs/src/manual/gpu.md`.
+
+**Comparative benchmarks**, all in `bench/` behind `bench/studies.jl` (90 s at reduced sizes,
+not in CI): DSP.jl loses by 27× on a filter bank while winning on features; hand-written SoA
+beats DLI at recurrence order 1 and loses by 8× at order 16; adding a recursive filter flips
+the Sobel pipeline from a 0.69× loss to a 3.6× win.
+
+**Documentation**: LoopVectorization withdrawn from ten recommendation sites — it is
+maintenance-only and falls back to `@inbounds @fastmath` on Julia ≥ 1.11, which is precisely
+what invariant 1 forbids. The audio demo is regenerated by this package's own kernel rather
+than copied. The front page states two decision criteria instead of one.
+
+Test suite: **406 passed, 0 failed** (was 301 at the start of the session).
+
+### A recurring methodological failure, recorded because it repeated
+
+Three times a measurement was made against a strawman and had to be redone:
+
+- the video benchmark compared against a batch-major reference instead of the contiguous
+  layout the documented benchmark uses, turning a real loss into a fake 5× win;
+- `permutedims!` was compared against a hand-written fallback in this package, which was both
+  slower than Base's and wrong, inflating a 34% gain into a claimed 57%;
+- the audio demo's first verification used a one-pole high-pass that let the untouched
+  fundamentals through and hid an inaudible filter.
+
+Each time the error was caught by a question rather than by the test suite. **The reference in
+any comparison must be the strongest thing a user would actually write**, and a fallback
+counts as a reference.
 
 ## Manual steps that need the repository owner
 
