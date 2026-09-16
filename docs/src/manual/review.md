@@ -29,6 +29,12 @@ item driver proves source reuse, but is not yet a performance-optimal stencil sc
   could therefore return `7` while the packed kernel still read `1`. A custom
   `Base.deepcopy_internal` now rebuilds `flat` from the copied packed storage, and the test
   suite checks the invariant.
+* `Serialization` had the same defect for the same reason, and it had been missed: a
+  `serialize`/`deserialize` round-trip returned an array whose scalar writes were invisible to
+  every kernel. `InterleaveSerializationExt` now writes only the packed storage and the batch
+  size, leaving the constructor as the single place that establishes the alias. The hazard is
+  structural rather than incidental: **any** field-wise reconstruction reproduces it, so JLD2,
+  BSON, and Arrow remain unsupported until given the same treatment.
 * CPU scratch is an instance-sized prototype; GPU scratch is a batch-major device array.
   The Metal host oracle now constructs an instance-sized CPU scratch view, so it no longer
   accidentally validates a linear slice of the GPU buffer.
@@ -73,16 +79,22 @@ tasks, or unconstrained runtime dispatch).
 
 ## Recommended next milestones
 
-1. Finish the container audit: `copy`, `deepcopy`, serialization, views, and garbage-
-   collection lifetime of the `unsafe_wrap` alias.
+1. Finish the container audit. `copy`, `deepcopy`, and `Serialization` are now covered by
+   tests; views, the garbage-collection lifetime of the `unsafe_wrap` alias, and third-party
+   serializers (JLD2, BSON, Arrow) are not.
 2. Strengthen cross-backend tests with nonuniform data, non-multiple batch sizes, boundary
-   cases, and independent scratch contents. Constant images and affine Laplacians are useful
-   smoke tests but are not sufficient numerical or performance tests.
+   cases, and independent scratch contents. *Done for the shared KernelAbstractions suite and
+   the CPU-backend GPU testsets*: constant inputs made several comparisons vacuous (a Sobel
+   filter of a constant image is zero everywhere, and a constant image is invariant under an
+   `i`/`j` swap), and every batch size was a multiple of the work-group width, so the masking
+   guard was never exercised. Independent scratch contents remain to be covered.
 3. Extend the repaired C++ comparison harness with identical problem sizes, operation
    counts, compiler flags, device information, transfers, and launch synchronization in
    every report.
-4. Enable the optional CUDA and AMDGPU runner jobs and compare their results with Metal.
-   This is the meaningful test of “write once, execute on several targets”.
+4. Obtain CUDA (and ideally AMDGPU) results and compare them with Metal. This is the
+   meaningful test of “write once, execute on several targets”. Note that GitHub's managed
+   GPU runners are unavailable to this repository, so this goes through `gpu/run_remote.sh` on
+   a borrowed or rented machine, a self-hosted runner, or JuliaGPU Buildkite.
 5. Add explicit execution plans and measured tuning for `P`, CPU chunking, and GPU
    workgroup size. For stencils, introduce a separate pixel/tile execution domain rather
    than duplicating the numerical formula.

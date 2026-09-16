@@ -1,4 +1,4 @@
-# AGENTS.md — Legolas.jl
+# AGENTS.md — Interleave.jl
 
 Règles de travail pour ce dépôt. Les règles **générales** de style, de performance et
 d'outillage Julia sont dans [`julia-recommandations.md`](julia-recommandations.md) :
@@ -39,7 +39,7 @@ des limites de C++.
 
 0 ter. **Un lot est un tableau de scalaires.** `size(A) == (nbatch, dims…)`, `eltype(A) === T`,
    `A[b, i, j]` rend un scalaire, et l'indexation **linéaire** parcourt cette vue logique.
-   Le layout n'est accessible que par `parent(A)`. Toute méthode ajoutée à `Legolas.Array`
+   Le layout n'est accessible que par `parent(A)`. Toute méthode ajoutée à `Interleave.Array`
    doit respecter ce contrat.
    - ⚠️ Contraindre `getindex`/`setindex!` à `Vararg{Int,N}` avec `N = ndims` : sans cela
      `A[17]` est capté comme un numéro d'instance et rend silencieusement le mauvais
@@ -164,7 +164,7 @@ vectorise déjà veut `P = 1`, un noyau à récurrence veut `P` grand.
 
 `A.flat` est la vue scalaire `(P, dims…, npacks)` du **même buffer**, construite par
 `unsafe_wrap` dans le constructeur. Elle sert à implémenter l'indexation scalaire de
-`Legolas.Array` ; ce n'est pas une seconde façon d'écrire un noyau.
+`Interleave.Array` ; ce n'est pas une seconde façon d'écrire un noyau.
 
 Elle **doit** être un vrai `Array` et jamais un `ReinterpretArray` : mesuré sur un même
 stencil, `unsafe_wrap` → 46.8 GFlop/s, `reinterpret(reshape, T, data)` → 12.4, soit
@@ -221,7 +221,7 @@ Voir §3 du guide. Ce qui s'applique particulièrement :
 
 **Ni `f::Function`, ni `args::Tuple` nu.** Soit l'argument n'est pas typé, soit il porte
 un **type paramètre** : `f::F where F`, `args::NTuple{NA,Any} where NA`,
-`arrays::Vararg{`Legolas.Array`,NA} where NA`.
+`arrays::Vararg{`Interleave.Array`,NA} where NA`.
 
 Une annotation abstraite empêche la spécialisation : l'appel devient dynamique et les
 arguments sont boxés. **Mesuré sur le driver** : avec `arrays::Tuple` et `views::Tuple`,
@@ -257,9 +257,14 @@ Voir §7. Spécifique au projet :
 
 ## 6. Points ouverts
 
-- **Le nom `Legolas` est déjà pris** dans le registre General (Beacon Biosignals,
-  utilitaires Arrow). `Project.toml` déclare `name = "Legolas"` : l'enregistrement sous
-  ce nom est impossible. À trancher avant toute publication.
+- ~~Le nom `Legolas` est déjà pris dans le registre General.~~ **Réglé** : le paquet
+  s'appelle `Interleave` (`Project.toml`), le dépôt est `Interleave.jl`, et le nom
+  `Interleave` est libre dans le registre General (vérifié le 2026-09-16). Seul le
+  répertoire de travail local s'appelle encore `Legolas.jl`.
+- **Toute reconstruction champ par champ casse l'alias `data`/`flat`.** `deepcopy`
+  (`src/array.jl`) et `Serialization` (`ext/InterleaveSerializationExt.jl`) sont traités ;
+  JLD2, BSON et Arrow ne le sont pas et reproduiraient le bug — silencieusement, puisque
+  l'indexation scalaire écrirait alors dans un tampon qu'aucun noyau ne lit.
 - Composition `Vec{P,Dual}` (SIMD × différentiation automatique) : ne fonctionne pas
   directement (`Vec` exige un type feuille LLVM). La généricité vaut sur chaque axe
   séparément, pas encore sur leur produit.
