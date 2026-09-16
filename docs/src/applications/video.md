@@ -6,6 +6,36 @@ images.
 
 ![Fused spatial and temporal video pipeline](../assets/video-pipeline.svg)
 
+## See it
+
+```@raw html
+<!-- ATTENTION au chemin : Documenter NE RÉÉCRIT PAS les liens dans un bloc `@raw html`, et
+     `prettyurls` (actif en CI, donc sur le site publié) rend cette page à
+     applications/<nom>/index.html, soit un niveau plus profond qu'en local. Le `../../` ci-
+     dessous est donc correct EN PRODUCTION et cassé dans un `make.jl` lancé sans CI=true.
+     Pour prévisualiser les médias en local : CI=true julia --project=docs docs/make.jl -->
+<div class="interleave-media">
+  <video autoplay loop muted playsinline width="100%" poster="../../assets/media/video_pipeline_demo.webp">
+    <source src="../../assets/media/video_pipeline_demo.mp4" type="video/mp4">
+    <img src="../../assets/media/video_pipeline_demo.webp" alt="Fused Sobel and motion pipeline" width="100%">
+  </video>
+  <p class="interleave-caption">
+    Fused Sobel edge response and temporal motion differencing, the kernel benchmarked below.
+  </p>
+</div>
+```
+
+!!! note "Rendered by the C++ implementation"
+    Unlike the [audio demo](biquad.md), this clip was **not** re-rendered by this package. It
+    comes from [Legolas++](https://laurentplagne.github.io/Legolas/), the C++ project these
+    ideas come from, which ships the same fused kernel. The Julia port computes the same
+    result — the test suite checks it against a scalar oracle — but re-rendering the clip
+    needs the original footage, which is not in this repository.
+
+    It is kept because it shows what the kernel *does*, which no diagram conveys. It is not
+    evidence about this implementation's output or speed; for that, see the measurements
+    below.
+
 Each output pixel depends on a neighbourhood of input pixels, but output pixels do not depend
 on earlier output pixels. Like depthwise convolution, the contiguous spatial loop is open to
 ordinary compiler vectorization. The benchmark tests whether packing independent streams is

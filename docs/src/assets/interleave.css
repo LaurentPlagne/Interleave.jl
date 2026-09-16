@@ -46,6 +46,30 @@
   min-width: 820px;
 }
 
+/* Conteneur des démos audio/vidéo. La règle `min-width: 820px` ci-dessus vise les <img>
+   des schémas ; une vidéo doit au contraire rester dans la colonne et se réduire sur mobile. */
+.interleave-media {
+  max-width: 52rem;
+  margin: 1.5rem auto;
+}
+
+.interleave-media video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--documenter-border, #283a50);
+}
+
+.interleave-media audio {
+  display: block;
+  width: 100%;
+}
+
+.interleave-media .interleave-caption {
+  margin: 0.5rem 0 0;
+}
+
 .interleave-caption {
   max-width: 52rem;
   margin: -1rem auto 1.5rem;

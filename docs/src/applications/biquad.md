@@ -11,6 +11,42 @@ exactly the population parallelism Interleave needs.
 
 ![Four feedback filters advancing in SIMD lockstep](../assets/biquad-streams.svg)
 
+## Hear it
+
+```@raw html
+<!-- ATTENTION au chemin : Documenter NE RÉÉCRIT PAS les liens dans un bloc `@raw html`, et
+     `prettyurls` (actif en CI, donc sur le site publié) rend cette page à
+     applications/<nom>/index.html, soit un niveau plus profond qu'en local. Le `../../` ci-
+     dessous est donc correct EN PRODUCTION et cassé dans un `make.jl` lancé sans CI=true.
+     Pour prévisualiser les médias en local : CI=true julia --project=docs docs/make.jl -->
+<div class="interleave-media">
+  <audio controls preload="none" style="width: 100%;">
+    <source src="../../assets/media/biquad_demo.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+  </audio>
+  <p class="interleave-caption">
+    0–3 s: a raw sawtooth Am7 chord. 3–6 s: the same chord through a 600 Hz low-pass biquad.
+  </p>
+</div>
+```
+
+This is not an illustration of the algorithm — it **is** the algorithm. The 64 partials of the
+chord are the 64 channels of the batch, they go through `apply!(biquad!, …)` together, and what
+you hear is their sum. The generator asserts that the packed result is bit-exact against the
+scalar reference before it writes a single sample, so a demo that sounded right while the
+kernel was wrong could not be produced.
+
+Regenerate it with:
+
+```bash
+julia --project=docs docs/media/make_biquad_demo.jl
+ffmpeg -f s16le -ar 44100 -ac 1 -i docs/media/biquad_demo.pcm -b:a 96k out.mp3
+```
+
+The script prints the measured band response — `-0.0 dB` at 200 Hz, `-2.8 dB` at the 600 Hz
+cutoff, `-15.9 dB` at 1500 Hz, `-29.3 dB` at 3 kHz — which is the textbook second-order
+Butterworth curve.
+
 The moving packet in the animation is a sample index, not a time window: every lane owns the
 complete state of one channel, so channels never contaminate each other.
 

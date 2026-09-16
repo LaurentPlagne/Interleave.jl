@@ -222,6 +222,9 @@ benchmark shipped with the project:
 - recurrence-heavy Thomas, IIR biquad, and Black–Scholes Crank–Nicolson kernels;
 - a depthwise convolution and a fused Sobel-motion pipeline that LLVM already vectorizes.
 
+You can also **hear** the [filter bank](applications/biquad.md) — the audio is produced by
+this repository's own kernel — and **see** the [Sobel-motion pipeline](applications/video.md).
+
 Each study includes an animated explanation, the complete `P` sweep, explicit threaded
 results, and a comparison with the most relevant alternatives. The negative cases are part
 of the design argument: Interleave provides `P=1` so the same kernel can decline DLI when
