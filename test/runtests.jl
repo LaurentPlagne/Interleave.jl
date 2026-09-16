@@ -565,6 +565,39 @@ end
         @test apply!(thomas!, X, D, U, L, Bv; scratch = scratchlike(X)) === X
     end
 
+    @testset "contrat : contrôle de flux uniforme" begin
+        # Un noyau peut être appelable et violer le contrat quand même. Le diagnostic doit
+        # nommer la cause ET la sortie, parce que la réponse réflexe — `ifelse` — n'a pas
+        # non plus de méthode pour un `Vec`, ce qui laissait l'utilisateur sans issue.
+        X = Interleave.Array{T,2,8}(undef, 16, 8); fill!(X, -3)
+        Y = similar(X); fill!(Y, 0)
+
+        branchy!(y, x) = (for i in eachindex(x); y[i] = x[i] > 0 ? x[i] : -x[i]; end; y)
+        err = try; apply!(branchy!, Y, X); nothing; catch e; e end
+        @test err isa ArgumentError
+        @test occursin("branches on data", err.msg)
+        @test occursin("branchy!", err.msg)
+        @test occursin("vifelse", err.msg)
+
+        # Opération scalaire qui ne se relève pas au paquet.
+        casty!(y, x) = (y[1] = x[Int(x[1])]; y)
+        err2 = try; apply!(casty!, Y, X); nothing; catch e; e end
+        @test err2 isa ArgumentError
+        @test occursin("vifelse", err2.msg)
+
+        # La forme correcte, et surtout : le MÊME noyau doit rester valide à P = 1.
+        safe!(y, x) = (for i in eachindex(x); y[i] = vifelse(x[i] > 0, x[i], -x[i]); end; y)
+        apply!(safe!, Y, X)
+        @test all(Y[b, i] == T(3) for b in 1:16, i in 1:8)
+
+        Xs = fill(T(-3), 16, 8); Ys = zeros(T, 16, 8)
+        apply!(safe!, Ys, Xs)
+        @test Ys == [Y[b, i] for b in 1:16, i in 1:8]      # P=8 et P=1 d'accord
+
+        # Un noyau conforme ne doit pas être ralenti ni perturbé par la garde.
+        @test (@allocated apply!(safe!, Y, X)) == 0
+    end
+
     @testset "tune choisit P par la mesure" begin
         make(P) = thomas_setup(2_048, 32; pack = Val(P))
         r = tune(thomas!, make; packs = (1, 4, 8), rounds = 2)

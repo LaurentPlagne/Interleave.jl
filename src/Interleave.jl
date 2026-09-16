@@ -18,7 +18,7 @@ contraction can break bit-exact agreement.
 """
 module Interleave
 
-using SIMD: Vec, VecTypes
+using SIMD: Vec, VecTypes, vifelse
 using OhMyThreads: tforeach, index_chunks, SerialScheduler, StaticScheduler,
                    DynamicScheduler, GreedyScheduler
 
@@ -30,7 +30,9 @@ export packet, instance, packs, scratchlike, tune,
        packsize, npacks, instance_size, npadding, lanetype, packtype
 # Réexportés par commodité : ce sont les schedulers attendus par `parallel_apply!`.
 export SerialScheduler, StaticScheduler, DynamicScheduler, GreedyScheduler
-export Vec
+#  est la seule façon d écrire une condition qui vaut pour un paquet ET pour un
+# scalaire : c est la primitive qui préserve la promesse « un seul noyau ».
+export Vec, vifelse
 
 include("array.jl")
 include("apply.jl")

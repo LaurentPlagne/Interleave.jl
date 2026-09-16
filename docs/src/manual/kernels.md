@@ -99,3 +99,40 @@ The packed specialization only works when every operation used by the kernel exi
 `SIMD.Vec`. Basic arithmetic and many elementary patterns work naturally; arbitrary Julia
 objects, dynamically typed values, and automatic-differentiation dual numbers inside a
 `Vec` do not currently form a general solution.
+
+## Control flow must be uniform across lanes
+
+This is the one place where "write the scalar kernel and change the element type" needs a
+qualification. At `P > 1` an element is a packet, so a comparison yields a `Vec{P,Bool}` — one
+answer per lane — and there is no single branch to take:
+
+```julia
+y[i] = x[i] > 0 ? x[i] : -x[i]        # invalid: the test is a Vec{P,Bool}
+y[i] = vifelse(x[i] > 0, x[i], -x[i]) # valid
+```
+
+[`vifelse`](https://github.com/eschnett/SIMD.jl) selects per lane and is re-exported by
+Interleave. It also works on plain scalars, which is what matters: **the rewritten kernel is
+still correct at `P = 1`**, so you do not fork the source.
+
+`Base.ifelse` is *not* a substitute — it has no method for `Vec`, so the reflex answer fails
+too. That dead end is why the drivers now diagnose the situation rather than letting Julia's
+`non-boolean used in boolean context` stand alone:
+
+```
+ArgumentError: kernel `badkernel!` branches on data: a comparison between packets yields a
+`Vec{P,Bool}`, which has no single truth value.
+
+A kernel must use the SAME control flow for every lane of a packet. …
+```
+
+Three things cannot be rewritten with `vifelse` at all, because they need lanes to disagree
+about *what work to do* rather than *which value to keep*:
+
+- a **data-dependent early exit** (`x[i] > tol && break`);
+- a **data-dependent index** (`x[Int(k[i])]`, a gather);
+- a **per-lane iteration count**, such as a convergence loop that stops at different steps.
+
+Those kernels need `P = 1`, or a decomposition that moves the divergence out of the packed
+axis. Note that uniform control flow is not a performance guideline here — it is a
+*correctness* boundary, and the driver enforces it.

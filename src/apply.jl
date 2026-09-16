@@ -56,8 +56,10 @@ end
 # un appel par `apply!`, jamais par paquet, donc le chemin chaud est intact.
 # `nameof(typeof(f))` rend le nom mangle (`#thomas!`) ; `nameof(f)` rend `thomas!`, mais
 # n'existe que pour une `Function` — un type appelable passe par son type.
-_kernel_name(f::Function) = string(nameof(f))
-_kernel_name(f) = string(nameof(typeof(f)))
+# Un noyau anonyme rend `#6`, qui n'aide personne : on dit simplement « the kernel ».
+_kernel_name(f::Function) = _kernel_ref(string(nameof(f)))
+_kernel_name(f) = _kernel_ref(string(nameof(typeof(f))))
+_kernel_ref(n) = startswith(n, '#') ? "the kernel" : "kernel `$n`"
 
 @noinline function _kernel_arity_error(f, arrays::NTuple{NA,Any}, scratch) where {NA}
     views = _packets(arrays, 1)
@@ -67,21 +69,21 @@ _kernel_name(f) = string(nameof(typeof(f)))
         # Le noyau accepterait-il un argument de plus ? C'est le cas le plus fréquent.
         if applicable(f, views..., scratchlike(first(arrays)))
             throw(ArgumentError(
-                "kernel `$name` cannot be called with $NA packet view$plural and no " *
+                "$name cannot be called with $NA packet view$plural and no " *
                 "workspace, but it accepts one more argument. It most likely needs a " *
                 "scratch buffer:\n" *
-                "    apply!($name, arrays...; scratch = scratchlike(first_array))"))
+                "    apply!(kernel, arrays...; scratch = scratchlike(first_array))"))
         end
     else
         # Symétrique : un scratch passé à un noyau qui n'en veut pas.
         if applicable(f, views...)
             throw(ArgumentError(
-                "kernel `$name` takes $NA packet view$plural and no workspace, but a " *
+                "$name takes $NA packet view$plural and no workspace, but a " *
                 "`scratch` argument was supplied. Drop the `scratch` keyword."))
         end
     end
     throw(ArgumentError(
-        "kernel `$name` cannot be called on this batch. It is invoked with $NA packet " *
+        "$name cannot be called on this batch. It is invoked with $NA packet " *
         "view$plural of element type $(eltype(first(views)))" *
         (scratch === nothing ? "" : " plus a workspace of element type $(eltype(scratch))") *
         ".\nA kernel must accept one view per array passed to the driver, in the same " *
@@ -116,6 +118,51 @@ end
     ndims(scratch) == ndims(A) && size(scratch, 1) == size(A, 1) &&
         _scratch_shape_error(arrays, scratch)
     nothing
+end
+
+# Un noyau peut être parfaitement APPELABLE et violer quand même le contrat. Le cas courant
+# est le branchement sur une donnée : à `P > 1`, `x[i] > 0` rend un `Vec{P,Bool}`, pas un
+# `Bool`, et un `if` dessus n'a plus de sens — les lanes ne sont pas d'accord entre elles.
+#
+# Julia dit alors « non-boolean used in boolean context », ce qui est exact mais muet sur la
+# marche à suivre. Pire : la réponse réflexe, `ifelse`, n'a pas non plus de méthode pour `Vec`.
+# L'utilisateur est donc dans une impasse sans indication. La sortie est `vifelse`, qui marche
+# sur un `Vec` ET sur un scalaire — donc le même noyau reste valide à `P = 1`.
+#
+# Le `try` ne coûte rien quand rien n'est levé ; il n'entoure pas le corps du noyau mais la
+# boucle entière, donc le chemin chaud est intact.
+const _CONTRACT_HINT = """
+A kernel must use the SAME control flow for every lane of a packet. Rewrite the branch
+without one:
+
+    y[i] = x[i] > 0 ? x[i] : -x[i]        # invalid: the test is a Vec{P,Bool}
+    y[i] = vifelse(x[i] > 0, x[i], -x[i]) # valid, and still correct at P = 1
+
+`vifelse` is re-exported by Interleave. What cannot be expressed this way at all is a
+data-dependent early exit, a data-dependent index, or per-lane recursion depth; those kernels
+need `P = 1`, or a different decomposition."""
+
+@noinline function _rethrow_kernel_error(f, e)
+    name = _kernel_name(f)
+    if e isa TypeError && e.expected === Bool
+        throw(ArgumentError(
+            "$name branches on data: a comparison between packets yields a " *
+            "`Vec{P,Bool}`, which has no single truth value.\n\n" * _CONTRACT_HINT))
+    elseif e isa MethodError && any(a -> a isa Vec, e.args)
+        throw(ArgumentError(
+            "$name applies `$(e.f)` to a packet, and no method accepts one. " *
+            "Scalar-only operations — conversion to `Int`, indexing by a value, branching — " *
+            "do not lift to `Vec{P,T}`.\n\n" * _CONTRACT_HINT))
+    end
+    rethrow(e)
+end
+
+@inline function _guarded(f::F, body::G) where {F,G}
+    try
+        body()
+    catch e
+        _rethrow_kernel_error(f, e)
+    end
 end
 
 """
@@ -153,7 +200,7 @@ function apply!(f::F, arrays::Vararg{AbstractArray,NA}; scratch = nothing) where
     _check_scratch(arrays, scratch)
     sc = _newscratch(scratch)
     _check_kernel(f, arrays, sc)
-    _runpacks!(f, 1:npk, arrays, sc)
+    _guarded(f, () -> _runpacks!(f, 1:npk, arrays, sc))
     first(arrays)
 end
 
@@ -182,7 +229,7 @@ function parallel_apply!(f::F, arrays::Vararg{AbstractArray,NA};
     _check_scratch(arrays, scratch)
     _check_kernel(f, arrays, _newscratch(scratch))
     if scheduler isa SerialScheduler
-        _runpacks!(f, 1:npk, arrays, _newscratch(scratch))
+        _guarded(f, () -> _runpacks!(f, 1:npk, arrays, _newscratch(scratch)))
     else
         chunks = index_chunks(1:npk; n = max(1, min(nchunks, npk)))
         tforeach(chunks; scheduler) do ks
