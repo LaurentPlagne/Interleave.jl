@@ -80,34 +80,59 @@ M1 Max (L1d 128 KB, **L2 12 MB**):
 | 1 048 576 | 28.0 MB | 2369.29 ms | 80.81 ms | 37.44 ms | 2.16× |
 | 2 097 152 | 56.0 MB | 6063.74 ms | 165.68 ms | 74.36 ms | 2.23× |
 
-**DLI beats hand-written SoA by a steady factor of about 2.2, and the ratio does not grow
-with the population.** The sweep deliberately crosses the 12 MB L2 boundary — from 7 KB to
-56 MB, 4.6× past it — with no visible change in the ratio.
+**DLI beats hand-written SoA by a steady factor of about 2.2 on this kernel, and the ratio
+does not grow with the population.** The sweep deliberately crosses the 12 MB L2 boundary —
+from 7 KB to 56 MB, 4.6× past it — with no visible change.
 
-That result corrects this documentation. Earlier revisions explained the DLI advantage by
-cache residency, "a large population *can* lose cache locality" — a size-conditional claim
-that the measurement does not support. The advantage is real, structural, and **unconditional**,
-and its mechanism is *memory traffic* rather than cache hit rate:
+On *this* kernel the mechanism is memory traffic rather than cache behaviour. Both variants are
+bandwidth-bound and reach comparable bandwidth (36 versus 29 GB/s single-threaded); SoA simply
+moves about 1.8× more bytes, because back substitution needs one scratch value per instance per
+step, so the SoA formulation must materialise an entire `nbatch × nx` workspace in DRAM while
+the DLI workspace is `nx × P` and never leaves L1.
 
-| | passes over the data | bytes moved | achieved | 
-|---|---:|---:|---:|
-| DLI | ~5 (`D`,`U`,`L`,`B` read, `X` written) | 2.68 GB | 36.1 GB/s |
-| SoA | ~9 (the above, plus a full `nbatch × nx` scratch written then re-read, plus `sm1`) | 4.83 GB | 29.2 GB/s |
+### The tridiagonal result does not generalise
 
-Both variants are bandwidth-bound and reach comparable bandwidth; SoA simply moves about 1.8×
-more bytes, which brackets the measured 2.2×. The reason is structural: the back-substitution
-needs one scratch value per instance per step, so the **SoA formulation must materialise an
-entire `nbatch × nx` workspace in DRAM**, while DLI's workspace is `nx × P` and never leaves
-L1. That penalty is proportional to the problem from the very first size, which is exactly why
-the ratio is flat instead of crossing over.
+It would be easy to stop there and conclude that the DLI advantage is a modest constant. That
+conclusion is wrong, and `bench/pentasoa.jl` shows why. A **pentadiagonal** solve needs *two*
+auxiliary sequences carried to the back substitution instead of one, so the SoA form
+materialises `2 × nbatch × n` of workspace and reaches back *two* columns in several arrays at
+once. Same three traversals, same bit-exact agreement, `n = 64`, `P = 16`:
 
-So the intuition that DLI protects the caches is directionally right — it *does* keep a
-working set that SoA spills — but it buys a constant factor, not a growing one.
+| `nbatch` | SoA scratch | reference | SoA `@simd` | DLI | DLI / SoA |
+|---:|---:|---:|---:|---:|---:|
+| 16 384 | 8 MB | 34.96 ms | 10.46 ms | 1.14 ms | **9.19×** |
+| 262 144 | 128 MB | 886.40 ms | 200.16 ms | 17.73 ms | **11.29×** |
+| 1 048 576 | 512 MB | 4046.66 ms | 870.45 ms | 76.77 ms | **11.34×** |
+| 2 097 152 | 1024 MB | 8186.06 ms | 1734.67 ms | 147.49 ms | **11.76×** |
 
-!!! note "One kernel, one machine"
-    Thomas with `nx = 64` on an M1 Max. A kernel whose SoA form does *not* need a
-    batch-sized workspace would narrow this gap, and a machine with a smaller L2 could behave
-    differently at the small end. Re-run `bench/soavsdli.jl` rather than porting the verdict.
+The gap goes from 2.2× to nearly **12×**, and a traffic-only model does not explain it —
+traffic differs by just 1.57×. The achieved bandwidth is where it happens:
+
+| pentadiagonal, `nbatch` = 2 097 152 | bytes moved | achieved |
+|---|---:|---:|
+| DLI | 3.76 GB | 25.5 GB/s |
+| SoA | 5.91 GB | **3.4 GB/s** |
+
+**SoA's achieved bandwidth collapses by 7.5×**, and 1.57 × 7.5 ≈ 11.8 accounts for the
+measurement. The cause is the number of simultaneous batch-major streams: roughly 7 for the
+tridiagonal form, 11 to 13 for the pentadiagonal one, each striding `nbatch × 4` bytes — 8 MB
+at this size — between consecutive `i`. That exceeds what the hardware prefetchers and the TLB
+sustain, and the memory system falls off a cliff. DLI is immune by construction: its entire
+per-packet working set is `n × P` per array, about 37 KB in total here, **whatever `nbatch` is
+and however many bands the matrix has**.
+
+So the locality argument for AoSoA is real after all — it simply needs enough concurrent
+streams to appear. The tridiagonal kernel sits below that threshold and shows only the traffic
+effect; the pentadiagonal kernel sits above it. The honest summary is that **the DLI advantage
+over hand-written SoA grows with the number of arrays the recurrence must carry**, not with the
+size of the population.
+
+!!! note "Two kernels, one machine"
+    Tridiagonal and pentadiagonal, `n = 64`, on an M1 Max. The two differ by more than 5×,
+    which is the point: a kernel whose SoA form needs no batch-sized workspace would narrow the
+    gap further still, and a machine with different prefetcher or TLB limits would move the
+    threshold. Re-run `bench/soavsdli.jl` and `bench/pentasoa.jl` rather than porting a
+    verdict.
 
 ## 2. IIR biquad filter bank — measured against DSP.jl
 

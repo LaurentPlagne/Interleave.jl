@@ -37,7 +37,7 @@ That is the natural first alternative, and it exposes the essential trade-off:
 | physical layout | pleasant part | price paid |
 |---|---|---|
 | job-major / AoS | one recurrence is contiguous and reads naturally | values from different jobs are far apart, so SIMD across jobs needs gathers |
-| global SoA | all jobs at position `i` are contiguous and an explicit inner job loop can vectorize | the algorithm must be transposed into “time outside, jobs inside”; `i-1` is `nbatch` scalars away, and the formulation needs a batch-sized workspace, so it moves about 1.8x more memory at every size ([measured](manual/what-it-replaces.md)) |
+| global SoA | all jobs at position `i` are contiguous and an explicit inner job loop can vectorize | the algorithm must be transposed into “time outside, jobs inside”; the formulation needs a batch-sized workspace and keeps one strided stream per array, so it costs 2.2x on a tridiagonal solve and **11.8x** on a pentadiagonal one, where the stream count overwhelms the prefetchers ([measured](manual/what-it-replaces.md)) |
 | DLI / blocked SoA | one element is a packet of `P` jobs, while packet `i-1` remains adjacent to packet `i` | `P` becomes a layout choice that must be tuned |
 
 DLI is often called an AoSoA layout: it applies SoA only inside a cache-sized group of
