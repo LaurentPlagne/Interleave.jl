@@ -28,14 +28,20 @@ end
 """Construit un essai BenchmarkTools spécialisé sur le type de l'appelable."""
 benchmarkable(f) = BenchmarkTools.@benchmarkable $f() samples=1 evals=1
 
+@inline _reset_benchmark!(::Nothing, ::Int) = nothing
+@inline _reset_benchmark!(resets, i::Int) = (resets[i](); nothing)
+
 """Joue toutes les variantes à chaque tour ; rend le meilleur temps de chacune.
 
 BenchmarkTools fournit l'isolation des globales et la mesure en nanosecondes. Nous gardons
 néanmoins l'ordre A/B entrelacé : un `Trial` d'un échantillon est collecté pour chaque
 variante à chaque tour, au lieu d'épuiser une variante avant de commencer la suivante.
 """
-function interleaved(variants; rounds = 8)
-    for (_, f) in variants
+function interleaved(variants; rounds = 8, resets = nothing)
+    resets === nothing || length(resets) == length(variants) ||
+        throw(ArgumentError("one reset callback is required per benchmark variant"))
+    for (i, (_, f)) in enumerate(variants)
+        _reset_benchmark!(resets, i)
         f()                                  # échauffement : compilation + pages
     end
     trials = map(variants) do pair
@@ -43,7 +49,11 @@ function interleaved(variants; rounds = 8)
         name => benchmarkable(f)
     end
     best = Dict{String,Float64}()
-    for _ in 1:rounds, (name, trial) in trials
+    for _ in 1:rounds, (i, (name, trial)) in enumerate(trials)
+        # Every trial has one evaluation, so reset work stays outside the timed
+        # region while each sample starts from the same state. This is essential
+        # for in-place recurrences such as Thomas and Black-Scholes.
+        _reset_benchmark!(resets, i)
         t = BenchmarkTools.minimum(BenchmarkTools.run(trial)).time / 1e9
         best[name] = min(get(best, name, Inf), t)
     end

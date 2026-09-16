@@ -29,7 +29,7 @@ choose `P=1`.
 
 Start with the visual [documentation and tutorials](docs/src/index.md), especially the
 [tridiagonal recurrence tutorial](docs/src/tutorials/thomas.md). The
-[benchmark application studies](docs/src/applications/index.md) cover all five shipped
+[benchmark application studies](docs/src/applications/index.md) cover all shipped
 kernels with animations, complete performance tables, and comparisons with alternative
 compiler, library, threaded, and GPU approaches.
 
@@ -39,9 +39,9 @@ suite, and the deliberately lower-level Vulkan/SPIR-V prototype.
 
 ## Reproducible target benchmarks
 
-The GitHub Actions workflow `Cross-platform benchmarks` can be launched manually, on a
-release, or weekly. It runs the CPU suite on Linux and Apple Silicon, benchmarks every
-  validation kernel on Metal macOS, and compiles/validates the Vulkan SPIR-V ABI on Linux. The
+The GitHub Actions workflow `Cross-platform benchmarks` runs on pushes to `main`, can be
+launched manually, on a release, or weekly. It runs the CPU suite on Linux and Apple Silicon, benchmarks every
+  validation kernels on Metal macOS, and compiles/validates the Vulkan SPIR-V ABI on Linux. The
 results and raw logs are uploaded as workflow artifacts. A real Vulkan throughput job is
 reserved for a self-hosted runner labelled `linux`, `vulkan`, and `gpu`; the standard GitHub
 hosted Linux runner is used only for software validation and must not be presented as a GPU

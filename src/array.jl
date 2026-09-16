@@ -100,6 +100,18 @@ struct Array{T,N,P,M,E} <: AbstractArray{T,N}
     end
 end
 
+# `flat` is an alias of `data`, not an independent owner.  The generic deepcopy
+# implementation copies both fields independently, which silently breaks the DLI
+# invariant: scalar indexing then observes a different buffer from `instance`.
+# Rebuild the scalar view from the copied packed storage instead.
+function Base.deepcopy_internal(A::Array{T,N,P,M,E}, dict::IdDict) where {T,N,P,M,E}
+    haskey(dict, A) && return dict[A]
+    data = Base.deepcopy_internal(A.data, dict)
+    copy = _wrap(T, Val(P), data, A.nbatch)
+    dict[A] = copy
+    copy
+end
+
 # `Array{T,N}` signifierait « N dimensions », comme chez Base : on ne définit donc aucun
 # constructeur à deux paramètres. L'assemblage interne passe par `_wrap`.
 _wrap(::Type{T}, ::Val{P}, data::Base.Array{E,N}, nbatch::Integer) where {T,P,E,N} =

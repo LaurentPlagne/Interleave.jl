@@ -26,18 +26,27 @@ function run(; nopt = 16_384, ngrid = 64, nt = 32, rounds = 5)
     bufs = map(P -> (E = packtype(T, Val(P)); SharedBuf(fill!(Array{E}(undef, ngrid), zero(E)))), PACKS)
 
     variants = Pair{String,Any}["référence" => () -> reference!(Vr, Dr, Ur, Lr, Rr, Sr, nt)]
+    V0r, R0r = copy(Vr), copy(Rr)
+    resets = Function[() -> (copyto!(Vr, V0r); copyto!(Rr, R0r); fill!(Sr, zero(T)))]
     for (P, s, b) in zip(PACKS, sets, bufs)
         push!(variants, "P=$P" => let s = s, b = b
             () -> apply!((v, d, u, l, r, sc) -> blackscholes_cn!(v, d, u, l, r, sc, nt),
                             s...; scratch = b)
+        end)
+        push!(resets, let s = s, b = b, s0 = deepcopy(s)
+            () -> (copyto!(s[1], s0[1]); copyto!(s[5], s0[5]); fill!(b(), zero(eltype(b()))))
         end)
         push!(variants, "P=$P threadé" => let s = s
             sc = similar(instance(s[1], 1))
             () -> parallel_apply!((v, d, u, l, r, w) -> blackscholes_cn!(v, d, u, l, r, w, nt),
                             s...; scratch = sc, scheduler = StaticScheduler())
         end)
+        push!(resets, let s = s, s0 = deepcopy(s)
+            sc = similar(instance(s[1], 1))
+            () -> (copyto!(s[1], s0[1]); copyto!(s[5], s0[5]); fill!(sc, zero(eltype(sc))))
+        end)
     end
-    best = interleaved(variants; rounds)
+    best = interleaved(variants; rounds, resets)
 
     header("Black-Scholes Crank-Nicolson (double récurrence)",
            "$nopt options × grille $ngrid × $nt pas de temps — Thomas imbriqué dans la boucle temporelle",

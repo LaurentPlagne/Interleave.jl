@@ -40,6 +40,29 @@ function tridiag_mul!(R, D, U, L, X)
     R
 end
 
+"""Squared norm of one independent instance, written to its one-element output."""
+function batch_squarednorm!(out, A)
+    E = eltype(A)
+    acc = zero(E)
+    @inbounds for i in eachindex(A)
+        x = A[i]
+        acc += x * x
+    end
+    out[1] = acc
+    out
+end
+
+"""Dot product of two independent instances, written to a one-element output."""
+function batch_dot!(out, A, B)
+    E = eltype(A)
+    acc = zero(E)
+    @inbounds for i in eachindex(A)
+        acc += A[i] * B[i]
+    end
+    out[1] = acc
+    out
+end
+
 """
 Filtre IIR biquad, forme directe I :
 `y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]`.

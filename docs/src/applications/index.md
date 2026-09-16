@@ -1,8 +1,8 @@
 # Benchmark applications
 
-The benchmark suite is not a gallery of five victories. It is a controlled experiment:
-three kernels expose the kind of dependency Interleave targets, while two deliberately show
-where changing the SIMD axis is counterproductive.
+The benchmark suite is not a gallery of victories. It is a controlled experiment: the
+recurrence kernels expose the dependency Interleave targets, while stencils and reductions
+show where ordinary compiler SIMD is already a strong baseline.
 
 | application | dependency inside one instance | ordinary reference | best Interleave configuration | conclusion |
 |---|---|---:|---:|---|
@@ -11,6 +11,7 @@ where changing the SIMD axis is counterproductive.
 | [Black–Scholes Crank–Nicolson](black-scholes.md) | time loop containing a Thomas solve | 1.8 GFlop/s | `P=32`, 17.51× | strong fit |
 | [Depthwise 3×3 convolution](depthwise.md) | none between output pixels | 41.1 GFlop/s | `P=1`, 1.03× | keep ordinary SIMD |
 | [Sobel plus motion](video.md) | none between output pixels | 43.1 GFlop/s | `P=1`, 0.99× | packing is not the gain |
+| [Per-instance reductions](reductions.md) | reduction within each instance | control case | measured `P` | compare against ordinary compiler SIMD |
 
 ![Reference throughput versus measured DLI speedup](../assets/fit-map.svg)
 
@@ -68,6 +69,6 @@ suite rather than being inferred from timings.
 4. Add task parallelism only after understanding the sequential result.
 5. Include layout conversion in an application-level measurement.
 
-The five case studies show each step with the actual benchmark kernel. For a cross-cutting
+The case studies show each step with the actual benchmark kernel. For a cross-cutting
 comparison with compiler vectorization, explicit SIMD, loop transformers, domain libraries,
 and GPUs, see [Positioning and alternatives](../manual/alternatives.md).

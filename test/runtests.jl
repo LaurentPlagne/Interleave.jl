@@ -366,6 +366,31 @@ end
         end
     end
 
+    @testset "reductions over independent instances" begin
+        nb, n = 13, 17
+        A = Interleave.Array{T}(undef, nb, n; pack = Val(8))
+        B = Interleave.Array{T}(undef, nb, n; pack = Val(8))
+        for b in 1:nb, i in 1:n
+            A[b, i] = T(b) / 10 + T(i) / 100
+            B[b, i] = T(1) - T(b) / 20 + T(i) / 200
+        end
+        norm = Interleave.Array{T}(undef, nb, 1; pack = Val(8))
+        dot = Interleave.Array{T}(undef, nb, 1; pack = Val(8))
+        apply!(batch_squarednorm!, norm, A)
+        apply!(batch_dot!, dot, A, B)
+
+        norm_ref = zeros(T, nb, 1)
+        dot_ref = zeros(T, nb, 1)
+        As = [A[b, i] for b in 1:nb, i in 1:n]
+        Bs = [B[b, i] for b in 1:nb, i in 1:n]
+        apply!(batch_squarednorm!, norm_ref, As)
+        apply!(batch_dot!, dot_ref, As, Bs)
+        @test norm == norm_ref
+        @test dot == dot_ref
+        @test all(isfinite, norm)
+        @test all(isfinite, dot)
+    end
+
     @testset "vue scalaire : même mémoire" begin
         A = Interleave.Array{T}(undef, 10, 4; pack = Val(4))
         fill!(A, 0)
@@ -378,6 +403,16 @@ end
         A[5, 1] = -1                          # lot 5 = lane 1 du paquet 2
         @test A.flat[1, 1, 2] == -1
         @test parent(A)[1, 2][1] == -1
+    end
+
+    @testset "deepcopy preserves the packed/scalar alias" begin
+        A = Interleave.Array(fill(T(1), 3, 4); pack = Val(4))
+        B = deepcopy(A)
+        B[1, 1] = T(7)
+        @test B[1, 1] == T(7)
+        @test Interleave.instance(B, 1)[1][1] == T(7)
+        @test A[1, 1] == T(1)
+        @test pointer(B.flat) != pointer(A.flat)
     end
 
     @testset "instances 3-D et au-delà" begin
@@ -559,6 +594,17 @@ end
         ref = copy(R); apply!(tridiag_mul!, ref, D, U, L, Xr)
         gpu_apply!(tridiag_mul!, R, D, U, L, Xr; wait = true)
         @test R == ref
+
+        A = [T(b) / 10 + T(i) / 100 for b in 1:nb, i in 1:ngrid]
+        B = [T(1) - T(b) / 20 + T(i) / 200 for b in 1:nb, i in 1:ngrid]
+        Nref, Dref = zeros(T, nb, 1), zeros(T, nb, 1)
+        N, Ddot = zeros(T, nb, 1), zeros(T, nb, 1)
+        apply!(batch_squarednorm!, Nref, A)
+        apply!(batch_dot!, Dref, A, B)
+        gpu_apply!(batch_squarednorm!, N, A; wait = true)
+        gpu_apply!(batch_dot!, Ddot, A, B; wait = true)
+        @test N == Nref
+        @test Ddot == Dref
     end
 
     @testset "apply! ne parallélise pas" begin

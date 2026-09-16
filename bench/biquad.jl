@@ -19,19 +19,27 @@ end
 
 function run(; nchan = 4_096, nsamp = 1_024, rounds = 5)
     Yr, Xr = fill(T(0), nsamp, nchan), fill(T(1), nsamp, nchan)
+    Yr0 = copy(Yr)
     sets = map(P -> batched(nchan, nsamp, Val(P)), PACKS)
 
     variants = Pair{String,Any}["référence" => () -> reference!(Yr, Xr, COEFFS)]
+    resets = Function[() -> copyto!(Yr, Yr0)]
     for (P, s) in zip(PACKS, sets)
         push!(variants, "P=$P" => let s = s
             () -> apply!((y, x) -> biquad!(y, x, COEFFS), s...)
+        end)
+        push!(resets, let s = s, Y0 = deepcopy(s[1])
+            () -> copyto!(s[1], Y0)
         end)
         push!(variants, "P=$P threadé" => let s = s
             () -> parallel_apply!((y, x) -> biquad!(y, x, COEFFS), s...;
                             scheduler = StaticScheduler())
         end)
+        push!(resets, let s = s, Y0 = deepcopy(s[1])
+            () -> copyto!(s[1], Y0)
+        end)
     end
-    best = interleaved(variants; rounds)
+    best = interleaved(variants; rounds, resets)
 
     header("IIR biquad forme directe I (récurrence temporelle)",
            "$nchan canaux × $nsamp échantillons — y[n] dépend de y[n-1] et y[n-2]",

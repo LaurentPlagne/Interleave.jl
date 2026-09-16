@@ -2,20 +2,20 @@
 //
 // Compile from Interleave.jl with the same flags as Legolas++ itself:
 //   c++ -O3 -DNDEBUG -std=c++14 -arch arm64 -fno-slp-vectorize \
-//       -mtune=native -I../Interleave -I../Interleave/Interleave/include \
-//       -I../Interleave/tst/MultiThomas \
+//       -mtune=native -I../Legolas -I../Legolas/Legolas/include \
+//       -I../Legolas/tst/MultiThomas \
 //       bench/legolas_cpp_vectorization_audit.cxx -o /tmp/legolas_cpp_audit
 // Add -ffp-contract=off when comparing against Interleave.jl's bit-exact path.
 
 #define main legolas_multithomas_main
-#include "../../Interleave/tst/MultiThomas/MultiThomas.cxx"
+#include "../../Legolas/tst/MultiThomas/MultiThomas.cxx"
 #undef main
 
 template <int P>
 struct AuditCase {
   using Array = typename std::conditional<
-      P == 1, Interleave::Array<float, 2>,
-      Interleave::Array<float, 2, P, 2>>::type;
+       P == 1, Legolas::Array<float, 2>,
+       Legolas::Array<float, 2, P, 2>>::type;
 
   Array X, D, U, L, B;
 
@@ -28,7 +28,7 @@ struct AuditCase {
     B.fill(1.0f);
   }
 
-  void run() { Interleave::map(ThomasSolver(), D, U, L, B, X); }
+  void run() { Legolas::map(ThomasSolver(), D, U, L, B, X); }
 };
 
 template <int P>

@@ -61,18 +61,29 @@ function run(; nsys = 65_536, nx = 64, rounds = 5)
     bufs = map(P -> (E = packtype(T, Val(P)); SharedBuf(fill!(Array{E}(undef, nx), zero(E)))), PACKS)
 
     variants = Pair{String,Any}["référence" => () -> reference!(Xr, Dr, Ur, Lr, Br, Sr)]
+    Xr0, Sr0 = copy(Xr), copy(Sr)
+    resets = Function[() -> (copyto!(Xr, Xr0); copyto!(Sr, Sr0))]
     push!(variants, "SoA global" =>
           () -> soa_reference!(Xsoa, Dsoa, Usoa, Lsoa, Bsoa, Ssoa))
+    Xsoa0, Ssoa0 = copy(Xsoa), copy(Ssoa)
+    push!(resets, () -> (copyto!(Xsoa, Xsoa0); copyto!(Ssoa, Ssoa0)))
     for (P, s, b) in zip(PACKS, sets, bufs)
         push!(variants, "P=$P" => let s = s, b = b
             () -> apply!(thomas!, s...; scratch = b)
+        end)
+        push!(resets, let s = s, b = b, s0 = deepcopy(s)
+            () -> (copyto!(s[1], s0[1]); fill!(b(), zero(eltype(b()))))
         end)
         push!(variants, "P=$P threadé" => let s = s, P = P
             sc = similar(instance(s[1], 1))
             () -> parallel_apply!(thomas!, s...; scratch = sc, scheduler = StaticScheduler())
         end)
+        push!(resets, let s = s, s0 = deepcopy(s)
+            sc = similar(instance(s[1], 1))
+            () -> (copyto!(s[1], s0[1]); fill!(sc, zero(eltype(sc))))
+        end)
     end
-    best = interleaved(variants; rounds)
+    best = interleaved(variants; rounds, resets)
 
     header("Thomas tridiagonal (récurrence)",
            "$nsys systèmes de taille $nx — récurrence stricte, aucun compilateur ne la vectorise",

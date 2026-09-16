@@ -1,6 +1,8 @@
 name: Cross-platform benchmarks
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   release:
     types: [published]
@@ -11,6 +13,13 @@ on:
 # machines, so timing noise must never prevent a merge.
 permissions:
   contents: read
+
+# The benchmark commands are piped through `tee`.  GitHub's implicit shell is
+# `bash -e`, which otherwise reports the status of `tee` instead of a failed
+# Julia process.  Explicit bash enables `pipefail` for trustworthy results.
+defaults:
+  run:
+    shell: bash
 
 jobs:
   cpu-linux:

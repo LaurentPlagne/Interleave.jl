@@ -22,7 +22,13 @@ function _host_reference(f, host, scratch)
     if scratch === nothing
         apply!(f, args...)
     else
-        apply!(f, args...; scratch = copy(scratch))
+        # CPU `apply!` receives one instance-sized workspace; the GPU driver
+        # receives a batch-major workspace and selects one row per work item.
+        # Do not accidentally validate the CPU path with a linear slice of the
+        # batched GPU scratch buffer.
+        instance_scratch = view(scratch, 1,
+                                ntuple(_ -> Colon(), Val(ndims(scratch) - 1))...)
+        apply!(f, args...; scratch = copy(instance_scratch))
     end
     result
 end
@@ -46,10 +52,19 @@ function _case(name, f, host; scratch = nothing, rtol = 5f-5)
     scale = max(maximum(abs, reference), 1f0)
     err <= rtol * scale || error("$name: max error $err exceeds $(rtol * scale)")
 
-    # The timed region contains only the resident KA launch.  For recurrent kernels the
-    # output is overwritten in place, so repeated launches remain valid work samples.
-    runner = () -> _run_gpu(f, device, dscratch)
-    elapsed = @belapsed $runner() samples = 5 evals = 1
+    # Reset all device buffers before every sample, outside the timed region.  Several
+    # kernels are in-place recurrences; without this setup each sample would solve the
+    # output of the preceding sample rather than the same problem.
+    pristine = map(MtlArray, host)
+    reset = () -> begin
+        for i in eachindex(device)
+            copyto!(device[i], pristine[i])
+        end
+        dscratch === nothing || fill!(dscratch, zero(eltype(dscratch)))
+        nothing
+    end
+    trial = BenchmarkTools.@benchmarkable _run_gpu($f, $device, $dscratch) setup = ($reset())
+    elapsed = BenchmarkTools.minimum(BenchmarkTools.run(trial; samples = 5)).time / 1e9
     println(rpad(name, 22), " ", lpad(round(elapsed * 1e3; digits = 3), 9),
             " ms | max error ", err)
     nothing
@@ -93,6 +108,12 @@ function main()
 
     _case("Tridiagonal product", tridiag_mul!,
           (zeros(T, nb, nx), D[:, :, 1], U[:, :, 1], L[:, :, 1], fill(T(0.25), nb, nx)))
+
+    nb, n = 1_024, 256
+    A = [sinpi(T(b) / 17) + T(i) / n for b in 1:nb, i in 1:n]
+    B = [cospi(T(b) / 23) - T(i) / (2n) for b in 1:nb, i in 1:n]
+    _case("Squared norm", batch_squarednorm!, (zeros(T, nb, 1), A))
+    _case("Dot product", batch_dot!, (zeros(T, nb, 1), A, B))
     println("Metal KernelAbstractions suite passed")
 end
 

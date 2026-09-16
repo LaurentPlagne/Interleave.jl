@@ -21,19 +21,27 @@ end
 
 function run(; nchan = 512, H = 64, W = 64, rounds = 5)
     outr, inpr = fill(T(0), H, W, nchan), fill(T(1), H, W, nchan)
+    outr0 = copy(outr)
     sets = map(P -> batched(nchan, H, W, Val(P)), PACKS)
 
     variants = Pair{String,Any}["référence" => () -> reference!(outr, inpr, W3)]
+    resets = Function[() -> copyto!(outr, outr0)]
     for (P, s) in zip(PACKS, sets)
         push!(variants, "P=$P" => let s = s
             () -> apply!((o, i) -> depthwise3x3!(o, i, W3), s...)
+        end)
+        push!(resets, let s = s, O0 = deepcopy(s[1])
+            () -> copyto!(s[1], O0)
         end)
         push!(variants, "P=$P threadé" => let s = s
             () -> parallel_apply!((o, i) -> depthwise3x3!(o, i, W3), s...;
                             scheduler = StaticScheduler())
         end)
+        push!(resets, let s = s, O0 = deepcopy(s[1])
+            () -> copyto!(s[1], O0)
+        end)
     end
-    best = interleaved(variants; rounds)
+    best = interleaved(variants; rounds, resets)
 
     header("Convolution depthwise 3×3 (stencil 2D, sans récurrence)",
            "$nchan canaux de $(H)×$(W) — instances 2D, le compilateur sait déjà vectoriser la référence",

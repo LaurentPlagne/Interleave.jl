@@ -40,6 +40,7 @@ makedocs(;
             "Black–Scholes Crank–Nicolson" => "applications/black-scholes.md",
             "Depthwise 3×3 convolution" => "applications/depthwise.md",
             "Sobel plus motion" => "applications/video.md",
+            "Per-instance reductions" => "applications/reductions.md",
         ],
         "Guide" => [
             "Mental model" => "manual/concepts.md",
@@ -50,6 +51,7 @@ makedocs(;
             "Task parallelism" => "manual/parallel.md",
             "GPU execution" => "manual/gpu.md",
             "Positioning and alternatives" => "manual/alternatives.md",
+            "Design review and roadmap" => "manual/review.md",
         ],
         "API reference" => "reference.md",
     ],

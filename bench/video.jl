@@ -19,19 +19,27 @@ end
 
 function run(; nstream = 256, H = 128, W = 128, rounds = 5)
     outr, currr, prevr = fill(T(0), H, W, nstream), fill(T(1), H, W, nstream), fill(T(0.5), H, W, nstream)
+    outr0 = copy(outr)
     sets = map(P -> batched(nstream, H, W, Val(P)), PACKS)
 
     variants = Pair{String,Any}["référence" => () -> reference!(outr, currr, prevr, AB)]
+    resets = Function[() -> copyto!(outr, outr0)]
     for (P, s) in zip(PACKS, sets)
         push!(variants, "P=$P" => let s = s
             () -> apply!((o, c, p) -> sobel_motion!(o, c, p, AB), s...)
+        end)
+        push!(resets, let s = s, O0 = deepcopy(s[1])
+            () -> copyto!(s[1], O0)
         end)
         push!(variants, "P=$P threadé" => let s = s
             () -> parallel_apply!((o, c, p) -> sobel_motion!(o, c, p, AB), s...;
                             scheduler = StaticScheduler())
         end)
+        push!(resets, let s = s, O0 = deepcopy(s[1])
+            () -> copyto!(s[1], O0)
+        end)
     end
-    best = interleaved(variants; rounds)
+    best = interleaved(variants; rounds, resets)
 
     header("Pipeline vidéo : Sobel 3×3 + différence temporelle (instances 2D)",
            "$nstream flux de $(H)×$(W) — stencil spatial fusionné à la détection de mouvement",
