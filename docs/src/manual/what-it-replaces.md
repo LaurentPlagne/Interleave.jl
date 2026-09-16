@@ -48,15 +48,66 @@ Everything below was measured by `bench/runall.jl` on an Apple M-series machine 
   axis for the same reason.
 
 The one alternative that *does* work is to transpose your data into a global SoA layout and
-rewrite the kernel as "time outside, instances inside". That is DLI done by hand — and it
-costs you the readable one-problem kernel, plus cache locality once the population is large,
-since `i-1` is then `nbatch` scalars away.
+rewrite the kernel as "time outside, instances inside", with `@simd` on the instance loop.
+That is legal — instances are independent — and it is DLI done by hand. It is measured below.
 
 **Verdict.** 13.4× at `P=16`, and [`tune`](@ref) finds 18.3× at `P=32` on this machine — the
 packet size is genuinely worth measuring rather than assuming.
 
 *Strength:* the kernel source is unchanged and stays bit-exact against its scalar self.
 *Weakness:* you own a tuning parameter you did not have before.
+
+### DLI against a hand-written global SoA
+
+Transposing to global SoA is the serious alternative, so it deserves a measurement rather
+than an assertion. `bench/soavsdli.jl` runs three traversals over **the same**
+`(nbatch, nx)` array — identical footprint, only the loop order differs:
+
+- *reference*: `b` outside, `i` inside — strided along the recurrence;
+- *SoA*: `i` outside, `b` inside with `@simd` — instances contiguous;
+- *DLI*: one packet crosses the whole recurrence before the next starts.
+
+All three agree bit-exactly. Thomas, `nx = 64`, `P = 16`, `Float32`, one core of an Apple
+M1 Max (L1d 128 KB, **L2 12 MB**):
+
+| `nbatch` | SoA working set per `i` step | reference | SoA `@simd` | DLI | DLI / SoA |
+|---:|---:|---:|---:|---:|---:|
+| 256 | 7 KB | 0.15 ms | 0.01 ms | 0.01 ms | 1.38× |
+| 1 024 | 28 KB | 0.83 ms | 0.08 ms | 0.03 ms | 2.26× |
+| 16 384 | 448 KB | 25.60 ms | 1.08 ms | 0.55 ms | 1.98× |
+| 262 144 | 7.0 MB | 700.84 ms | 20.24 ms | 9.87 ms | 2.05× |
+| 524 288 | 14.0 MB | 1065.75 ms | 43.61 ms | 18.82 ms | 2.32× |
+| 1 048 576 | 28.0 MB | 2369.29 ms | 80.81 ms | 37.44 ms | 2.16× |
+| 2 097 152 | 56.0 MB | 6063.74 ms | 165.68 ms | 74.36 ms | 2.23× |
+
+**DLI beats hand-written SoA by a steady factor of about 2.2, and the ratio does not grow
+with the population.** The sweep deliberately crosses the 12 MB L2 boundary — from 7 KB to
+56 MB, 4.6× past it — with no visible change in the ratio.
+
+That result corrects this documentation. Earlier revisions explained the DLI advantage by
+cache residency, "a large population *can* lose cache locality" — a size-conditional claim
+that the measurement does not support. The advantage is real, structural, and **unconditional**,
+and its mechanism is *memory traffic* rather than cache hit rate:
+
+| | passes over the data | bytes moved | achieved | 
+|---|---:|---:|---:|
+| DLI | ~5 (`D`,`U`,`L`,`B` read, `X` written) | 2.68 GB | 36.1 GB/s |
+| SoA | ~9 (the above, plus a full `nbatch × nx` scratch written then re-read, plus `sm1`) | 4.83 GB | 29.2 GB/s |
+
+Both variants are bandwidth-bound and reach comparable bandwidth; SoA simply moves about 1.8×
+more bytes, which brackets the measured 2.2×. The reason is structural: the back-substitution
+needs one scratch value per instance per step, so the **SoA formulation must materialise an
+entire `nbatch × nx` workspace in DRAM**, while DLI's workspace is `nx × P` and never leaves
+L1. That penalty is proportional to the problem from the very first size, which is exactly why
+the ratio is flat instead of crossing over.
+
+So the intuition that DLI protects the caches is directionally right — it *does* keep a
+working set that SoA spills — but it buys a constant factor, not a growing one.
+
+!!! note "One kernel, one machine"
+    Thomas with `nx = 64` on an M1 Max. A kernel whose SoA form does *not* need a
+    batch-sized workspace would narrow this gap, and a machine with a smaller L2 could behave
+    differently at the small end. Re-run `bench/soavsdli.jl` rather than porting the verdict.
 
 ## 2. IIR biquad filter bank — measured against DSP.jl
 
