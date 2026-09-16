@@ -127,8 +127,82 @@ effect; the pentadiagonal kernel sits above it. The honest summary is that **the
 over hand-written SoA grows with the number of arrays the recurrence must carry**, not with the
 size of the population.
 
-!!! note "Two kernels, one machine"
-    Tridiagonal and pentadiagonal, `n = 64`, on an M1 Max. The two differ by more than 5×,
+### It is the number of predecessors that decides
+
+Tridiagonal gave 2.2×, pentadiagonal 11.8×. Those are two points on a curve, and the curve has
+a parameter: **how many predecessors the recurrence carries**. `bench/orderscan.jl` makes it
+continuous with an order-`M` IIR,
+
+```math
+y[n] = b_0 x[n] + \sum_{k=1}^{M} b_k x[n-k] - \sum_{k=1}^{M} a_k y[n-k],
+```
+
+where the SoA form must keep `2M+1` concurrent batch-major streams while DLI holds `2M` state
+values in registers. 65 536 channels × 1024 samples, `P = 16`, all three variants bit-exact:
+
+| `M` | SoA streams | reference | SoA `@simd` | DLI | DLI / SoA |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 3 | 4393 ms | 12.74 ms | 31.51 ms | **0.40×** |
+| 2 | 5 | 5148 ms | 229.29 ms | 43.96 ms | 5.22× |
+| 4 | 9 | 793 ms | 342.34 ms | 79.01 ms | 4.33× |
+| 8 | 17 | 2436 ms | 1165.68 ms | 146.71 ms | 7.95× |
+| 16 | 33 | 7245 ms | 2700.83 ms | 321.75 ms | **8.39×** |
+
+Reproducible to about 2% across runs. Two things to take from it.
+
+**There is a floor, and it matters.** At `M = 1` — three streams — hand-written SoA *beats*
+DLI by 2.5×. A first-order recurrence is the ideal case for the SoA form: few streams,
+perfectly vectorized, no workspace. The advantage of DLI is not universal in the order either.
+
+**Above that floor the advantage grows with `M`**, from 5.2× to 8.4×, with a dip at `M = 4`
+that breaks strict monotonicity. The reference column is reproducibly non-monotonic too and is
+not the object of this study; it is reported rather than explained.
+
+### The same effect on a 2-D kernel, where it flips the verdict
+
+The Sobel-plus-motion pipeline is the documented *loss*: a pure stencil, already vectorized.
+`bench/videorec.jl` prepends what a real image pipeline does — a **recursive** smoothing along
+rows, Deriche/van Vliet family, of order `M` — and keeps the Sobel. `M = 0` is the original
+kernel. The reference is the strong one: `(H, W, nstream)` arrays where each image is
+contiguous, exactly as `bench/video.jl` uses. 256 streams of 128×128, `P = 8`, bit-exact:
+
+| `M` | reference | DLI | DLI / reference |
+|---:|---:|---:|---:|
+| 0 | 4.33 ms | 6.29 ms | **0.69×** |
+| 1 | 8.40 ms | 6.27 ms | **1.34×** |
+| 2 | 12.70 ms | 6.82 ms | 1.86× |
+| 4 | 23.66 ms | 7.67 ms | 3.09× |
+| 8 | 39.59 ms | 11.05 ms | **3.58×** |
+
+**The verdict flips between `M = 0` and `M = 1`** and then grows. The mechanism is visible in
+the columns rather than the ratio: DLI's time rises by 1.8× across the sweep while the
+reference's rises by 9.1×. DLI does not get faster — *the alternatives get slower*, because a
+row-scan recurrence is exactly what the compiler cannot vectorize, and DLI absorbs it into
+registers.
+
+(`M = 0` reads 0.69× here against 0.88× in the summary table: this kernel writes through an
+extra smoothing buffer that the original does not, which costs both variants equally but is
+not the same measurement.)
+
+### And the SoA source is genuinely harder to get right
+
+This is usually argued as a matter of taste. It is not only that. Writing these benchmarks,
+the DLI variant was in every case the *scalar kernel, unchanged* — that is the whole premise,
+and it cannot drift from the reference because it **is** the reference.
+
+Each SoA variant, by contrast, needed a second implementation: a transposed loop nest, an
+explicit boot phase for the first `M` samples, and separate batch-sized workspaces. The boot
+phase is where a real bug appeared here — it accumulated `acc + (b·x - a·y)` where the
+generated steady-state expression computes `(acc + b·x) - a·y`. Different associativity, one
+ulp in `Float32`, and bit-exactness with the scalar reference was silently lost. It looked like
+a property of SoA until it was tracked down; it was a typo in a loop that exists only because
+the layout changed.
+
+That is the ergonomic argument made concrete: **the alternative is a second source of truth,
+and second sources drift.**
+
+!!! note "Four kernels, one machine"
+    Tridiagonal, pentadiagonal, an order-`M` IIR and a recursive video filter, on an M1 Max. The two differ by more than 5×,
     which is the point: a kernel whose SoA form needs no batch-sized workspace would narrow the
     gap further still, and a machine with different prefetcher or TLB limits would move the
     threshold. Re-run `bench/soavsdli.jl` and `bench/pentasoa.jl` rather than porting a
