@@ -8,6 +8,11 @@ Two of the six answers are "you would be better off". Those are the important on
 competing package exists, it is **measured** rather than characterised — see the DSP.jl table
 below, which corrects an earlier unmeasured claim on this page.
 
+Every table here is reproduced by a file in [`bench/`](https://github.com/LaurentPlagne/Interleave.jl/tree/main/bench).
+`julia --project=bench bench/studies.jl` runs the whole set at reduced sizes in about 90
+seconds and reaches the same conclusions; each file's own defaults reproduce the exact numbers
+printed here.
+
 ## Where the numbers come from
 
 Everything below was measured by `bench/runall.jl` on an Apple M-series machine (NEON,
@@ -22,11 +27,20 @@ Everything below was measured by `bench/runall.jl` on an Apple M-series machine 
 | Depthwise 3×3 | **no** | 40.6 GFlop/s | `P=16`: **0.43×** | 1.73× |
 | Sobel + motion | **no** | 43.4 GFlop/s | `P=8`: **0.88×** | 2.77× |
 
-!!! tip "The decision rule is the reference throughput, not the application domain"
-    A reference at 1–3 GFlop/s means the compiler has failed — there is a recurrence, and
-    DLI returns 12–15×. A reference at 40+ GFlop/s means LLVM already vectorized the inner
-    loop; DLI can then only *take over* that gain, never add to it, and it takes it over
+!!! tip "Two questions decide, and neither is the application domain"
+    **1. What throughput does your reference reach?** At 1–3 GFlop/s the compiler has failed —
+    there is a recurrence, and DLI returns 12–15×. At 40+ GFlop/s LLVM already vectorized the
+    inner loop; DLI can then only *take over* that gain, never add to it, and it takes it over
     badly.
+
+    **2. How many predecessors does the recurrence carry?** This decides how DLI compares to
+    the serious alternative, a hand-written SoA layout. One predecessor and SoA wins; beyond
+    that DLI pulls ahead and keeps pulling — 2.2× on a tridiagonal solve, 11.8× on a
+    pentadiagonal one, 8.4× on a 16th-order IIR. The sweeps are below.
+
+    The two questions are independent, and the second can overturn the first: adding a
+    recursive filter to the Sobel pipeline — a documented *loss* at 0.69× — turns it into a
+    3.6× win without touching the stencil.
 
     The mechanism is worth stating plainly: **`Vec{P,T}` as an element type blocks the
     auto-vectorization LLVM would have performed by itself.** On the two stencil kernels,

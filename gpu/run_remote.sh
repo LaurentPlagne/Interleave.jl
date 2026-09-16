@@ -81,8 +81,24 @@ echo
 # The first instantiate downloads the vendor artifacts (1-2 GB for CUDA); expect a few
 # minutes on a fresh machine.
 
-echo "==> instantiating $ENV_DIR"
-julia --project="$ENV_DIR" -e 'using Pkg; Pkg.instantiate()'
+# Hors d'un TTY — Colab, une cellule `!`, un job CI — la barre de progression de Pkg se
+# REDESSINE en nouvelles lignes au lieu de se réécrire. Précompiler CUDA.jl produit alors des
+# dizaines de milliers de lignes, le log est tronqué, et on ne sait plus si l'étape a réussi,
+# échoué ou tourne encore. On journalise donc dans un fichier et on ne montre que la fin.
+#
+# Compter 5 à 10 minutes sur une machine à 2 cœurs : GPUCompiler et GPUArrays sont longs.
+LOG="${TMPDIR:-/tmp}/interleave-instantiate.log"
+echo "==> instantiating $ENV_DIR (log: $LOG)"
+echo "    this precompiles the CUDA/ROCm stack and can take 5-10 minutes; be patient"
+if julia --project="$ENV_DIR" -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()' \
+        > "$LOG" 2>&1; then
+    echo "==> instantiate OK"
+    grep -E "^\s+[0-9.]+ s|Installed|Updating" "$LOG" | tail -5 || true
+else
+    echo "!!! instantiate FAILED — last 40 lines of $LOG:" >&2
+    tail -40 "$LOG" >&2
+    exit 1
+fi
 
 echo "==> running the KernelAbstractions suite on $BACKEND"
 INTERLEAVE_KA_BACKEND="$BACKEND" julia --project="$ENV_DIR" gpu/ka/all.jl

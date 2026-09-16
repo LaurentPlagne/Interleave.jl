@@ -17,6 +17,13 @@ recurrence on a CPU.
 | domain/vendor library | a standard primitive it already implements | library-specific | adapt data and API | often the production choice when it matches |
 | GPU kernel/library | very large device-resident parallel workloads | map instances to threads or change algorithm | device code/data management | different scale and hardware target |
 
+!!! note "A second axis, measured"
+    The table above sorts by *what the tool is good at*. A second question sorts the outcome
+    just as strongly: **how many predecessors the recurrence carries**. A hand-written SoA
+    layout beats DLI on a first-order recurrence and loses by 8× on a sixteenth-order one, and
+    a kernel with no recurrence at all is where DLI loses outright. See
+    [What you would write instead](what-it-replaces.md) for the sweeps.
+
 ## What the compiler can and cannot infer
 
 Julia often lets LLVM vectorize straightforward loops automatically. The official

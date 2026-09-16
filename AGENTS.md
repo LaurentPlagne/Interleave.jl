@@ -109,7 +109,22 @@ Mesuré par `bench/runall.jl` (M-series, NEON 128 bits, 8 threads, Float32). Le 
 | Depthwise 3×3 | **non** | 40.6 GFlop/s | P=16 : **0.43×** | 1.73× |
 | Vidéo Sobel + mouvement | **non** | 43.4 GFlop/s | P=8 : **0.88×** | 2.77× |
 
-**La règle de décision est le débit de la référence, pas le domaine applicatif.** Une
+**Deux questions décident, et aucune n'est le domaine applicatif.**
+
+La première est le débit de la référence. La seconde, mesurée depuis (`bench/studies.jl`), est
+le **nombre de prédécesseurs** que porte la récurrence : elle gouverne l'écart avec la vraie
+alternative, un SoA global écrit à la main. Ordre 1 → le SoA gagne (0.4×) ; tridiagonal →
+2.2× ; IIR d'ordre 16 → 8.4× ; pentadiagonal → 11.8×. Le mécanisme n'est pas le trafic mémoire
+mais le **nombre de flux batch-majeurs concurrents** : au-delà d'une dizaine, prefetchers et
+TLB décrochent et la bande passante atteinte s'effondre (3.4 contre 25 Go/s mesurés). Le DLI y
+est immunisé, son ensemble de travail valant `n × P` par tableau quel que soit `nbatch`.
+
+⚠️ Conséquence pratique : **un verdict DLI n'est pas portable** d'un compilateur ou d'une
+machine à l'autre. Legolas++ mesure 2.82× sur le pipeline vidéo là où ce projet mesure 0.88×,
+parce que GCC n'avait pas vectorisé sa référence (12 GFlop/s) et que LLVM vectorise la nôtre
+(43 GFlop/s).
+
+**Le débit de la référence reste le premier critère.** Une
 référence à 1–3 GFlop/s signale un compilateur en échec (récurrence) : le DLI rend 12 à
 15×. Une référence à 40+ GFlop/s signale un compilateur qui a déjà vectorisé la boucle
 interne : le DLI ne peut alors que **reprendre** ce gain, jamais l'ajouter — et il le
