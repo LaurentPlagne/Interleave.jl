@@ -60,4 +60,13 @@ makedocs(;
     REPO...,
 )
 
-deploydocs(repo = "github.com/laurentplagne/Interleave.jl.git")
+# `devbranch` doit être explicite. Laissé à `nothing`, Documenter tente de deviner la branche
+# de développement, et le checkout superficiel d'Actions ne lui permet pas toujours d'y
+# arriver : il retombe alors sur `master`, décide qu'un push sur `main` ne le concerne pas, et
+# **sort sans rien déployer ni signaler d'erreur**. Le job reste vert, `gh-pages` n'est jamais
+# créée, et le site annoncé par le README n'existe pas. C'est exactement ce qui s'est produit.
+deploydocs(
+    repo = "github.com/laurentplagne/Interleave.jl.git",
+    devbranch = "main",
+    push_preview = false,
+)
