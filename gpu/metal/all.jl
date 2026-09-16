@@ -168,4 +168,6 @@ function main()
     println("$(KA_BACKEND) KernelAbstractions suite passed")
 end
 
+# Lancé directement, on exécute. Inclus par `gpu/ka/all.jl`, c'est lui qui appelle `main()` —
+# d'où la garde, qui évite de le faire deux fois.
 abspath(PROGRAM_FILE) == (@__FILE__) && main()

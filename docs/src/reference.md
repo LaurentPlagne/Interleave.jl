@@ -27,6 +27,7 @@ packet
 instance
 packs
 scratchlike
+Base.permutedims!
 apply!
 parallel_apply!
 Interleave.PacketBoundsError

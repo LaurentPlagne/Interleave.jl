@@ -36,6 +36,7 @@ export Vec, vifelse
 
 include("array.jl")
 include("apply.jl")
+include("repack.jl")
 include("tune.jl")
 include("gpu.jl")
 

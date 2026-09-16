@@ -678,6 +678,41 @@ end
         end
     end
 
+    @testset "permutedims! — repaquetage ADI" begin
+        # Aucune dimension multiple de P : le padding doit survivre au repaquetage.
+        ny, nx, nz = 37, 29, 11
+        src = [T(y + 100i + 10_000k) for y in 1:ny, i in 1:nx, k in 1:nz]
+        A = Interleave.Array{T,3,8}(src)
+
+        for (perm, dims) in (((2, 1, 3), (nx, ny, nz)),    # le lot change d'axe
+                             ((3, 2, 1), (nz, nx, ny)),    # idem, avec l'axe 3
+                             ((1, 3, 2), (ny, nz, nx)))    # le lot ne bouge pas
+            B = Interleave.Array{T,3,8}(undef, dims...)
+            @test permutedims!(B, A, perm) === B
+            @test B isa Interleave.Array{T,3,8}
+            idx = Iterators.product(map(Base.OneTo, dims)...)
+            @test all(B[J...] == A[ntuple(k -> J[perm[k]], 3)...] for J in idx)
+            # Le chemin rapide doit coïncider avec le repli générique, bit à bit.
+            G = Interleave.Array{T,3,8}(undef, dims...)
+            Interleave._generic_permutedims!(G, A, perm)
+            @test all(B[J...] === G[J...] for J in idx)
+            # Les lanes de padding restent initialisées.
+            nv = 8 - Interleave.npadding(B)
+            nv < 8 && @test all(iszero, view(B.flat, nv+1:8, :, :, Interleave.npacks(B)))
+        end
+
+        # Aller-retour : repaqueter puis revenir doit rendre l'original.
+        B = Interleave.Array{T,3,8}(undef, nx, ny, nz)
+        C = Interleave.Array{T,3,8}(undef, ny, nx, nz)
+        permutedims!(B, A, (2, 1, 3))
+        permutedims!(C, B, (2, 1, 3))
+        @test all(C[y, i, k] === A[y, i, k] for y in 1:ny, i in 1:nx, k in 1:nz)
+
+        @test_throws ArgumentError permutedims!(B, A, (1, 2))
+        @test_throws ArgumentError permutedims!(B, A, (1, 1, 3))
+        @test_throws DimensionMismatch permutedims!(C, A, (2, 1, 3))
+    end
+
     @testset "un Base.Array standard est un lot valide" begin
         # Le principe de Legolas++ : on écrit et on teste l'algorithme avec un tableau
         # ordinaire, puis on ne change que le type pour gagner en vitesse.
