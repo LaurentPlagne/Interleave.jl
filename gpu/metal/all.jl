@@ -1,18 +1,37 @@
-"""Run every validation kernel through the generic KernelAbstractions driver on Metal.
+"""Run every validation kernel through the generic KernelAbstractions driver.
 
 The functions below are the same scalar Julia kernels used by `apply!` and the CPU test
-suite.  Only the storage changes from `Array` to `MtlArray`; no Metal shader is written
-for an individual algorithm.  The sizes are intentionally resident and modest enough for
-GitHub's shared macOS runners.
+suite.  Only the storage changes from `Array` to a backend device array; no vendor shader
+is written for an individual algorithm.  Set `INTERLEAVE_KA_BACKEND` to `metal`, `cuda`,
+or `amdgpu` to select the backend.  The sizes are intentionally resident and modest
+enough for GitHub runners.
 """
 
+const KA_BACKEND = lowercase(get(ENV, "INTERLEAVE_KA_BACKEND", "metal"))
+
+if KA_BACKEND == "metal"
+    using Metal
+    const DeviceArray = Metal.MtlArray
+    const backend_functional = Metal.functional
+elseif KA_BACKEND == "cuda"
+    using CUDA
+    const DeviceArray = CUDA.CuArray
+    const backend_functional = CUDA.functional
+elseif KA_BACKEND == "amdgpu"
+    using AMDGPU
+    const DeviceArray = AMDGPU.ROCArray
+    const backend_functional = AMDGPU.functional
+else
+    error("unsupported INTERLEAVE_KA_BACKEND=$KA_BACKEND (expected metal, cuda, or amdgpu)")
+end
+
 using Interleave
-using Metal
+using KernelAbstractions
 using BenchmarkTools
 
 include(joinpath(@__DIR__, "..", "..", "test", "kernels.jl"))
 
-Metal.functional() || error("Metal.jl did not find a supported Apple GPU")
+backend_functional() || error("KernelAbstractions backend '$KA_BACKEND' did not find a supported GPU")
 
 const T = Float32
 
@@ -44,8 +63,8 @@ end
 
 function _case(name, f, host; scratch = nothing, rtol = 5f-5)
     reference = _host_reference(f, host, scratch)
-    device = map(MtlArray, host)
-    dscratch = scratch === nothing ? nothing : MtlArray(scratch)
+    device = map(DeviceArray, host)
+    dscratch = scratch === nothing ? nothing : DeviceArray(scratch)
     _run_gpu(f, device, dscratch)
     got = Array(first(device))
     err = maximum(abs, got .- reference)
@@ -55,7 +74,7 @@ function _case(name, f, host; scratch = nothing, rtol = 5f-5)
     # Reset all device buffers before every sample, outside the timed region.  Several
     # kernels are in-place recurrences; without this setup each sample would solve the
     # output of the preceding sample rather than the same problem.
-    pristine = map(MtlArray, host)
+    pristine = map(DeviceArray, host)
     reset = () -> begin
         for i in eachindex(device)
             copyto!(device[i], pristine[i])
@@ -114,7 +133,7 @@ function main()
     B = [cospi(T(b) / 23) - T(i) / (2n) for b in 1:nb, i in 1:n]
     _case("Squared norm", batch_squarednorm!, (zeros(T, nb, 1), A))
     _case("Dot product", batch_dot!, (zeros(T, nb, 1), A, B))
-    println("Metal KernelAbstractions suite passed")
+    println("$(KA_BACKEND) KernelAbstractions suite passed")
 end
 
 abspath(PROGRAM_FILE) == (@__FILE__) && main()

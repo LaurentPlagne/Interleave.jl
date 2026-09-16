@@ -18,16 +18,16 @@ This is the GPU analogue of the Interleave idea, but it is SIMT rather than expl
 SIMD. A device backend may still split or schedule a workgroup in hardware-specific
 ways; `gpu_apply!` does not promise a particular machine instruction width.
 
-## Metal tutorial
+## KernelAbstractions tutorial
 
-Install Metal.jl in the application environment, then keep each batch as an ordinary
-scalar matrix before uploading it:
+Install the vendor package in the application environment, then keep each batch as an
+ordinary scalar matrix before uploading it. The Julia kernel is unchanged across targets:
 
 ```julia
-using Interleave, Metal
+using Interleave, Metal                 # or CUDA / AMDGPU
 
 X, D, U, L, B = make_thomas_batch(Float32, nbatch, nx)
-dX, dD, dU, dL, dB = MtlArray.((X, D, U, L, B))
+dX, dD, dU, dL, dB = MtlArray.((X, D, U, L, B)) # CuArray / ROCArray on other targets
 dS = similar(dX)                    # one scratch row per independent problem
 
 gpu_apply!(thomas!, dX, dD, dU, dL, dB;
@@ -42,9 +42,9 @@ The `thomas!` function is the same scalar Julia function used by [`apply!`](@ref
 driver creates a small, allocation-free instance object inside every work item and passes
 those objects to the function. The same contract is exercised for Thomas, biquad,
 depthwise convolution, Sobel plus motion, Black–Scholes, a 3-D Laplacian, Thomas line
-sweeps, and tridiagonal products by the runnable
-[`gpu/metal/all.jl`](https://github.com/laurentplagne/Interleave.jl/blob/main/gpu/metal/all.jl)
-suite.
+sweeps, tridiagonal products, and reductions by the runnable
+[`gpu/ka/all.jl`](https://github.com/laurentplagne/Interleave.jl/blob/main/gpu/ka/all.jl)
+suite. Select a backend with `INTERLEAVE_KA_BACKEND=metal`, `cuda`, or `amdgpu`.
 
 There is one important qualification to “the same kernel”: Metal's compiler accepts a
 restricted, statically dispatched subset of Julia. Device code cannot allocate, throw,
@@ -61,37 +61,13 @@ second level of vectorization, increase register pressure, and usually reduce oc
 Tune `workgroupsize` instead. Start at 128 or 256, benchmark neighbouring values, and
 include transfer costs only when the application really transfers for every call.
 
-## Vulkan and SPIR-V
+## Deferred backends
 
-The Vulkan prototype deliberately stops at a stable shader ABI:
-
-- six `std430` scalar storage buffers for `X`, `D`, `U`, `L`, `B`, and scratch `S`;
-- offset `problem + i*stride`, identical to a Julia matrix `(stride, nx)`;
-- three `UInt32` push constants: `nbatch`, `nx`, and `stride`;
-- specialization constant 0 for the workgroup width;
-- one invocation per tridiagonal system.
-
-[`gpu/vulkan/shaders/thomas.comp`](https://github.com/laurentplagne/Interleave.jl/blob/main/gpu/vulkan/shaders/thomas.comp)
-is compiled and validated as Vulkan 1.2 SPIR-V by the accompanying script. Vulkan.jl
-can build a compute pipeline from that module.
-
-This is not yet a second implementation of [`gpu_apply!`](@ref). Vulkan.jl is a
-low-level Vulkan wrapper, not a Julia GPU compiler. The former JuliaGPU `SPIRV.jl`
-compiler is archived, while MLIR.jl does not currently provide a production Julia-to-
-Vulkan kernel path. Hiding hand-written GLSL behind the same function name would imply
-source portability that the stack cannot deliver.
-
-The next Vulkan milestone is therefore host-side infrastructure rather than another
-shader:
-
-1. retain a Vulkan instance, compute queue, command pool, and descriptor pool;
-2. allocate a reusable GPU-local buffer arena and staging buffers;
-3. cache pipelines by shader and workgroup specialization;
-4. submit asynchronously and make object lifetimes explicit;
-5. compare the same frozen scalar oracle used by the CPU and Metal tests.
-
-Only after that runtime is measured should a Julia-to-SPIR-V or MLIR lowering layer be
-considered. It is a compiler project, not a container change.
+Vulkan/SPIR-V is intentionally not part of the current API or continuous benchmark. The
+repository keeps the old [`gpu/vulkan/`](https://github.com/laurentplagne/Interleave.jl/tree/main/gpu/vulkan)
+directory as a historical ABI experiment, but no workflow compiles it and no result from it
+is presented as a KernelAbstractions execution. Reintroducing it would require a maintained
+Julia-to-SPIR-V compiler and a real host dispatcher, not merely another device-array alias.
 
 ## Continuous benchmark targets
 
@@ -100,15 +76,21 @@ The repository workflow mirrors the multi-target structure used by Legolas++:
 - Linux x86-64 runs the complete `BenchmarkTools` CPU suite;
 - macOS 14 on Apple Silicon runs the same CPU suite and all validation kernels through
   the resident Metal KernelAbstractions driver;
-- Linux validates the Vulkan 1.2 shader and its SPIR-V ABI using Mesa's software runtime;
-- an optional self-hosted `linux,vulkan,gpu` job is reserved for real Vulkan throughput once
-  the host dispatcher exists.
+- an optional NVIDIA CUDA job runs on an organization-configured GPU runner;
+- an optional AMDGPU/ROCm job runs on an organization-configured self-hosted runner.
 
-The CPU and Metal jobs upload their raw output and append it to the GitHub job summary. They
-are deliberately report-only: hosted runners are shared machines, so timing variance must not
-turn a performance observation into a correctness failure. Vulkan software validation is also
-not a GPU performance measurement; it only protects the shader/ABI contract until a physical
-GPU runner is available.
+The CPU, Metal, CUDA, and AMDGPU jobs upload their raw output and append it to the GitHub job
+summary. The CUDA and AMDGPU jobs are skipped until the repository variables
+`INTERLEAVE_NVIDIA_RUNNER` and `INTERLEAVE_AMD_RUNNER` are set to real runner names/labels.
+This is deliberate: standard GitHub-hosted runners do not provide a GPU, and GitHub does not
+provide a universal AMD label.
+
+To enable the jobs, open the repository's **Settings → Secrets and variables → Actions →
+Variables** and set `INTERLEAVE_NVIDIA_RUNNER` to the name/label of an organization-configured
+GitHub GPU larger runner (normally an NVIDIA T4), and/or set `INTERLEAVE_AMD_RUNNER` to the
+name/label of a self-hosted Linux runner with ROCm and AMDGPU.jl installed. The workflow does
+not guess labels: a wrong label must fail visibly instead of silently running on a CPU. GitHub's
+runner name and label syntax is documented in its [runner selection guide](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job).
 
 ## Correctness contract
 
@@ -116,7 +98,8 @@ The GPU tests must preserve the properties that matter:
 
 - no work item reads or writes another problem;
 - a non-multiple of the workgroup width is masked correctly;
-- sequential, Metal, and Vulkan results are compared against the same scalar oracle;
+- sequential and each configured KernelAbstractions backend are compared against the same
+  scalar oracle;
 - repeated asynchronous launches are deterministic;
 - no hidden host/device copy occurs in the timed region.
 

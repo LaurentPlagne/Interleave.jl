@@ -12,8 +12,8 @@ The first level is sequential. The other two exploit independence around it.
 
 On a GPU the mapping changes, not the algorithm: one work item owns one complete
 recurrence and neighbouring work items span the independent population. See
-[GPU execution: recurrence per work item](@ref) for the Metal implementation and the
-Vulkan/SPIR-V prototype.
+[GPU execution: recurrence per work item](@ref) for the shared
+KernelAbstractions implementation and its Metal, CUDA, and AMDGPU targets.
 
 ## Data Layout Interleaving
 

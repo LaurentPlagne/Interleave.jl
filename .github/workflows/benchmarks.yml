@@ -80,50 +80,60 @@ jobs:
             macos-metal.txt
             macos-metal-all.txt
 
-  vulkan-abi:
-    name: Vulkan/SPIR-V shader validation / Linux
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  # GitHub's standard hosted runners do not expose a GPU.  These two jobs are
+  # therefore opt-in: set the repository variable to the *runner name or label*
+  # configured by the organization.  An unset variable makes the job skipped,
+  # rather than pretending that a CPU runner measured GPU throughput.
+  ka-nvidia:
+    name: KernelAbstractions benchmark / NVIDIA CUDA
+    if: ${{ vars.INTERLEAVE_NVIDIA_RUNNER != '' }}
+    runs-on: ${{ vars.INTERLEAVE_NVIDIA_RUNNER }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Install Vulkan software runtime and tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq mesa-vulkan-drivers vulkan-tools
-          vulkaninfo --summary || true
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.11'
       - uses: julia-actions/cache@v2
-      - name: Instantiate Vulkan environment
-        run: julia --project=gpu/vulkan -e 'using Pkg; Pkg.instantiate()'
-      - name: Compile and validate SPIR-V ABI
-        run: julia --project=gpu/vulkan gpu/vulkan/compile.jl
-      - name: Run direct Vulkan Thomas smoke test
-        continue-on-error: true
+      - name: Instantiate CUDA environment
+        run: julia --project=gpu/cuda -e 'using Pkg; Pkg.instantiate()'
+      - name: NVIDIA device information
+        run: nvidia-smi
+      - name: Run KernelAbstractions CUDA benchmark suite
+        env:
+          INTERLEAVE_KA_BACKEND: cuda
         run: |
-          julia --project=gpu/vulkan gpu/vulkan/thomas.jl | tee vulkan-thomas.txt
-          cat vulkan-thomas.txt >> "$GITHUB_STEP_SUMMARY"
+          julia --project=gpu/cuda gpu/ka/all.jl | tee nvidia-cuda.txt
+          cat nvidia-cuda.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: interleave-vulkan-spirv
-          path: |
-            gpu/vulkan/shaders/thomas.spv
-            vulkan-thomas.txt
+          name: interleave-nvidia-cuda
+          path: nvidia-cuda.txt
 
-  # A real Vulkan performance measurement needs a self-hosted runner with a
-  # labelled GPU. Enable this job by setting the repository variable
-  # INTERLEAVE_VULKAN_RUNNER=true and registering labels linux,vulkan,gpu.
-  vulkan-gpu:
-    name: Vulkan GPU benchmark / self-hosted
-    if: ${{ vars.INTERLEAVE_VULKAN_RUNNER == 'true' }}
-    runs-on: [self-hosted, linux, vulkan, gpu]
-    continue-on-error: true
+  ka-amd:
+    name: KernelAbstractions benchmark / AMDGPU ROCm
+    if: ${{ vars.INTERLEAVE_AMD_RUNNER != '' }}
+    runs-on: ${{ vars.INTERLEAVE_AMD_RUNNER }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Vulkan device information
-        run: vulkaninfo --summary
-      - name: Run Vulkan benchmark harness
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate AMDGPU environment
+        run: julia --project=gpu/amd -e 'using Pkg; Pkg.instantiate()'
+      - name: AMD device information
         run: |
-          echo 'The Vulkan host dispatcher is not part of the current Julia API.'
-          echo 'This job is intentionally a reservation point for the device backend.'
+          rocminfo
+          rocm-smi || true
+      - name: Run KernelAbstractions AMDGPU benchmark suite
+        env:
+          INTERLEAVE_KA_BACKEND: amdgpu
+        run: |
+          julia --project=gpu/amd gpu/ka/all.jl | tee amd-rocm.txt
+          cat amd-rocm.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: interleave-amd-rocm
+          path: amd-rocm.txt

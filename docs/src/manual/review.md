@@ -35,9 +35,9 @@ item driver proves source reuse, but is not yet a performance-optimal stencil sc
 * All in-place CPU benchmark variants can now receive reset callbacks. Each one-evaluation
   sample starts from the same state, while reset work remains outside the timed region.
   This matters particularly for Black–Scholes, where `V` and `RHS` are overwritten.
-* The Metal suite resets resident device buffers before every timed sample. Its timings
-  remain launch-plus-device timings, but no longer measure a different numerical problem on
-  each repetition.
+* The shared KernelAbstractions suite resets resident device buffers before every timed
+  sample. Its timings remain launch-plus-device timings, but no longer measure a different
+  numerical problem on each repetition.
 * The benchmark workflow explicitly selects `bash`. This enables `pipefail`, so a Julia
   failure cannot be hidden by a successful `tee` command.
 * The C++ audit driver now points at the sibling Legolas++ checkout and compiles against
@@ -81,7 +81,7 @@ tasks, or unconstrained runtime dispatch).
 3. Extend the repaired C++ comparison harness with identical problem sizes, operation
    counts, compiler flags, device information, transfers, and launch synchronization in
    every report.
-4. Run the same kernels on a second real backend (CUDA is the most practical next target).
+4. Enable the optional CUDA and AMDGPU runner jobs and compare their results with Metal.
    This is the meaningful test of “write once, execute on several targets”.
 5. Add explicit execution plans and measured tuning for `P`, CPU chunking, and GPU
    workgroup size. For stencils, introduce a separate pixel/tile execution domain rather

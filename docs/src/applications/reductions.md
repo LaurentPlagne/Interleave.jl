@@ -1,6 +1,6 @@
 # Per-instance reductions
 
-The VulkanBench example also measures squared norms and dot products. They are useful here
+The common GPU benchmark suite also measures squared norms and dot products. They are useful here
 as a control case: the reduction is sequential *inside one instance*, while independent
 instances remain available for SIMD or GPU work.
 
@@ -36,6 +36,7 @@ The benchmark is part of the common suite:
 julia --project=bench -t auto bench/reductions.jl
 ```
 
-The Metal workflow runs the same two kernels through KernelAbstractions. Its result is a
-source-reuse and correctness check across backends, not a claim that one work item per
-reduction is the best possible vendor-specific reduction implementation.
+The Metal, CUDA, and AMDGPU workflows run the same two kernels through KernelAbstractions
+when the corresponding runners are configured. Their result is a source-reuse and
+correctness check across backends, not a claim that one work item per reduction is the best
+possible vendor-specific reduction implementation.
